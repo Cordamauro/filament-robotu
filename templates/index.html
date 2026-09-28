@@ -3,164 +3,155 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Filament Karşılaştırıcı</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>3D Filament Robotu - Fiyat Karşılaştırma</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { background-color: #f8f9fa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        .hero { background: linear-gradient(135deg, #0d6efd, #0a58ca); color: white; padding: 2rem 0; margin-bottom: 2rem; border-radius: 0 0 15px 15px; }
-        .card { border: none; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); transition: transform 0.2s; }
-        .card:hover { transform: translateY(-4px); }
-        .price-badge { background-color: #198754; color: white; font-size: 1.2rem; font-weight: bold; padding: 0.4rem 0.8rem; border-radius: 8px; }
-        .kg-price { font-size: 0.85rem; color: #6c757d; }
-        .img-container { height: 180px; display: flex; align-items: center; justify-content: center; background: #fff; padding: 10px; border-top-left-radius: 12px; border-top-right-radius: 12px; }
-        .img-container img { max-height: 100%; max-width: 100%; object-fit: contain; }
+        .hero { background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%); color: white; padding: 2.5rem 0; margin-bottom: 2rem; }
+        .card { border: none; box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075); transition: transform 0.2s; }
+        .card:hover { transform: translateY(-3px); }
+        .price-tag { font-size: 1.25rem; font-weight: bold; color: #198754; }
+        .badge-brand { background-color: #6c757d; }
     </style>
 </head>
 <body>
 
-    <div class="hero text-center">
-        <div class="container">
-            <h1 class="fw-bold">⚡ Filament Karşılaştırıcı</h1>
-            <p class="lead mb-0">En uygun fiyatlı 3D yazıcı filamentlerini anında bulun ve karşılaştırın</p>
-        </div>
+<div class="hero">
+    <div class="container text-center">
+        <h1 class="display-5 fw-bold">🤖 3D Filament Robotu</h1>
+        <p class="lead">20 Farklı Mağazadan Anlık Filament Fiyat Karşılaştırması</p>
+        <button id="btnUpdate" class="btn btn-warning btn-lg mt-2 fw-bold" onclick="triggerUpdate()">🔄 Verileri Güncelle</button>
+        <div id="updateStatus" class="small mt-2 text-white-50"></div>
     </div>
+</div>
 
-    <div class="container mb-5">
-        <!-- Arama ve Filtreler -->
-        <div class="card p-4 mb-4">
-            <div class="row g-3">
-                <div class="col-md-4">
-                    <input type="text" id="searchInput" class="form-control form-control-lg" placeholder="Filament ara (ör. PLA, Kırmızı)..." oninput="loadProducts()">
-                </div>
-                <div class="col-md-2">
-                    <select id="materialFilter" class="form-select form-select-lg" onchange="loadProducts()">
-                        <option value="">Tüm Materyaller</option>
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <select id="brandFilter" class="form-select form-select-lg" onchange="loadProducts()">
-                        <option value="">Tüm Markalar</option>
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <select id="colorFilter" class="form-select form-select-lg" onchange="loadProducts()">
-                        <option value="">Tüm Renkler</option>
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <button class="btn btn-outline-primary btn-lg w-100" onclick="triggerUpdate()">🔄 Verileri Güncelle</button>
-                </div>
+<div class="container">
+    <!-- FİLTRELEME BÖLÜMÜ -->
+    <div class="card p-3 mb-4">
+        <div class="row g-3">
+            <!-- MAĞAZA SEÇİM KUTUSU -->
+            <div class="col-md-3">
+                <label class="form-label fw-bold">🏪 Mağaza / Site</label>
+                <select id="filterSource" class="form-select" onchange="loadProducts()">
+                    <option value="">Tüm Siteler (20 Mağaza)</option>
+                </select>
             </div>
-        </div>
-
-        <div id="statusAlert" class="alert alert-info d-none text-center mb-4"></div>
-
-        <!-- Ürün Listesi Grid -->
-        <div id="productGrid" class="row row-cols-1 row-cols-md-3 row-cols-lg-4 g-4">
-            <div class="text-center w-100 py-5">
-                <div class="spinner-border text-primary" role="status"></div>
-                <p class="mt-2 text-muted">Ürünler yükleniyor...</p>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        async function fetchFilters() {
-            try {
-                const res = await fetch('/api/filters');
-                const data = await res.json();
-                
-                populateSelect('materialFilter', data.material, 'Tüm Materyaller');
-                populateSelect('brandFilter', data.brand, 'Tüm Markalar');
-                populateSelect('colorFilter', data.color, 'Tüm Renkler');
-            } catch (e) { console.error("Filtreler yüklenemedi", e); }
-        }
-
-        function populateSelect(id, items, defaultText) {
-            const select = document.getElementById(id);
-            const current = select.value;
-            select.innerHTML = `<option value="">${defaultText}</option>`;
-            if (items) {
-                items.forEach(item => {
-                    const opt = document.createElement('option');
-                    opt.value = item;
-                    opt.textContent = item;
-                    if(item === current) opt.selected = true;
-                    select.appendChild(opt);
-                });
-            }
-        }
-
-        async function loadProducts() {
-            const q = document.getElementById('searchInput').value;
-            const material = document.getElementById('materialFilter').value;
-            const brand = document.getElementById('brandFilter').value;
-            const color = document.getElementById('colorFilter').value;
-
-            const params = new URLSearchParams({ q, material, brand, color });
             
-            try {
-                const res = await fetch('/api/products?' + params);
-                const products = await res.json();
-                renderProducts(products);
-            } catch (e) {
-                document.getElementById('productGrid').innerHTML = '<div class="alert alert-danger w-100 text-center">Ürünler yüklenirken bir hata oluştu.</div>';
-            }
-        }
+            <div class="col-md-3">
+                <label class="form-label fw-bold">🏷️ Marka</label>
+                <select id="filterBrand" class="form-select" onchange="loadProducts()">
+                    <option value="">Tüm Markalar</option>
+                </select>
+            </div>
 
-        function renderProducts(products) {
-            const grid = document.getElementById('productGrid');
-            if (!products || products.length === 0) {
-                grid.innerHTML = '<div class="text-center w-100 py-5 text-muted">Aramanızla eşleşen filament bulunamadı.</div>';
-                return;
-            }
+            <div class="col-md-3">
+                <label class="form-label fw-bold">🧪 Materyal</label>
+                <select id="filterMaterial" class="form-select" onchange="loadProducts()">
+                    <option value="">Tüm Materyaller</option>
+                </select>
+            </div>
 
-            grid.innerHTML = products.map(p => `
-                <div class="col">
-                    <div class="card h-100">
-                        <div class="img-container">
-                            <img src="${p.image || 'https://via.placeholder.com/200?text=Gorsel+Yok'}" alt="${p.name}">
-                        </div>
-                        <div class="card-body d-flex flex-column">
-                            <span class="badge bg-secondary mb-2 w-auto align-self-start">${p.source}</span>
-                            <h6 class="card-title fw-bold text-dark mb-1">${p.name}</h6>
-                            <p class="text-muted small mb-2">${p.brand || ''} • ${p.material || ''} • ${p.color || ''}</p>
-                            
-                            <div class="mt-auto pt-2 d-flex justify-content-between align-items-end">
-                                <div>
-                                    <div class="price-badge">${p.price ? p.price + ' ₺' : 'Fiyat Yok'}</div>
-                                    ${p.kg_price ? `<div class="kg-price mt-1">${Math.round(p.kg_price)} ₺ / kg</div>` : ''}
-                                </div>
-                                <a href="${p.url}" target="_blank" class="btn btn-primary btn-sm">Mağazaya Git ↗</a>
-                            </div>
-                        </div>
+            <div class="col-md-3">
+                <label class="form-label fw-bold">🎨 Renk</label>
+                <select id="filterColor" class="form-select" onchange="loadProducts()">
+                    <option value="">Tüm Renkler</option>
+                </select>
+            </div>
+
+            <div class="col-md-12 mt-3">
+                <input type="text" id="searchQuery" class="form-control form-control-lg" placeholder="Filament adı veya renk ara..." onkeyup="loadProducts()">
+            </div>
+        </div>
+    </div>
+
+    <!-- ÜRÜN LİSTESİ -->
+    <div id="productList" class="row g-3">
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2 text-muted">Filamentler Yükleniyor...</p>
+        </div>
+    </div>
+</div>
+
+<script>
+async function loadFilters() {
+    const res = await fetch('/api/filters');
+    const data = await res.json();
+    
+    populateSelect('filterSource', data.source, 'Tüm Siteler (20 Mağaza)');
+    populateSelect('filterBrand', data.brand, 'Tüm Markalar');
+    populateSelect('filterMaterial', data.material, 'Tüm Materyaller');
+    populateSelect('filterColor', data.color, 'Tüm Renkler');
+}
+
+function populateSelect(id, items, defaultText) {
+    const select = document.getElementById(id);
+    const currentValue = select.value;
+    select.innerHTML = `<option value="">${defaultText}</option>`;
+    if(items) {
+        items.forEach(item => {
+            select.innerHTML += `<option value="${item}">${item}</option>`;
+        });
+    }
+    select.value = currentValue;
+}
+
+async function loadProducts() {
+    const source = document.getElementById('filterSource').value;
+    const brand = document.getElementById('filterBrand').value;
+    const material = document.getElementById('filterMaterial').value;
+    const color = document.getElementById('filterColor').value;
+    const q = document.getElementById('searchQuery').value;
+
+    const url = `/api/products?source=${encodeURIComponent(source)}&brand=${encodeURIComponent(brand)}&material=${encodeURIComponent(material)}&color=${encodeURIComponent(color)}&q=${encodeURIComponent(q)}`;
+    
+    const res = await fetch(url);
+    const products = await res.json();
+    
+    const list = document.getElementById('productList');
+    if (products.length === 0) {
+        list.innerHTML = `<div class="col-12 text-center py-5"><h4 class="text-muted">Aramanızla eşleşen filament bulunamadı.</h4><p>Lütfen "Verileri Güncelle" butonuna basıp 15 saniye bekleyin.</p></div>`;
+        return;
+    }
+
+    list.innerHTML = products.map(p => `
+        <div class="col-md-4 col-lg-3">
+            <div class="card h-100 p-3">
+                <span class="badge bg-secondary mb-2 w-auto align-self-start">${p.source}</span>
+                <h6 class="card-title text-truncate" title="${p.name}">${p.name}</h6>
+                <div class="mb-2">
+                    <span class="badge bg-primary">${p.material}</span>
+                    <span class="badge bg-info text-dark">${p.color}</span>
+                </div>
+                <div class="mt-auto pt-2 border-top d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="price-tag">${p.price} TL</div>
+                        <small class="text-muted">${p.kg_price ? Math.round(p.kg_price) + ' TL / kg' : ''}</small>
                     </div>
+                    <a href="${p.url}" target="_blank" class="btn btn-sm btn-outline-primary">Siteye Git ↗</a>
                 </div>
-            `).join('');
-        }
+            </div>
+        </div>
+    `).join('');
+}
 
-        async function triggerUpdate() {
-            const alert = document.getElementById('statusAlert');
-            alert.classList.remove('d-none');
-            alert.textContent = 'Veriler güncelleniyor, lütfen bekleyin...';
-            
-            try {
-                await fetch('/api/update', { method: 'POST' });
-                setTimeout(() => {
-                    alert.textContent = 'Güncelleme başlatıldı! Sayfa kısa süre sonra yenilenecek.';
-                    setTimeout(() => {
-                        alert.classList.add('d-none');
-                        fetchFilters();
-                        loadProducts();
-                    }, 3000);
-                }, 1000);
-            } catch (e) {
-                alert.textContent = 'Güncelleme başlatılamadı.';
-            }
-        }
-
-        fetchFilters();
+async function triggerUpdate() {
+    const btn = document.getElementById('btnUpdate');
+    btn.disabled = true;
+    btn.innerText = '⌛ Güncelleniyor...';
+    
+    await fetch('/api/update', { method: 'POST' });
+    
+    setTimeout(() => {
+        btn.disabled = false;
+        btn.innerText = '🔄 Verileri Güncelle';
+        loadFilters();
         loadProducts();
-    </script>
+    }, 12000);
+}
+
+loadFilters();
+loadProducts();
+</script>
 </body>
 </html>
