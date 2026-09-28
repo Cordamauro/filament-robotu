@@ -25,7 +25,11 @@ def data_dir() -> Path:
 
 APP_DIR = Path(__file__).resolve().parent
 DB_PATH = data_dir() / "filaments_v9.db"
+
+# sources.json bulma garantisi
 SOURCES_PATH = APP_DIR / "sources.json"
+if not SOURCES_PATH.exists():
+    SOURCES_PATH = Path(__file__).resolve().parent.parent / "sources.json"
 
 app = Flask(__name__, template_folder=str(APP_DIR / "templates"))
 update_lock = threading.Lock()
@@ -55,15 +59,12 @@ MATERIAL_PATTERNS = [
     ("PC", r"\bPC\b"), ("PLA", r"\bPLA\b")
 ]
 
-# FİLAMENT DIŞINDAKİ HER ŞEYİ KESİN ŞEKİLDE ENGELLE
-EXCLUDE_PATTERNS = re.compile(
-    r"vakum|poşet|saklama|kurutucu|dryer|dry box|sens[oö]r|holder|nozzle|hotend|extruder|"
-    r"rulman|fan|kablo|spatula|yapıştırıcı|reçine|resin|3d kalem|yedek parça|modül|kart|"
-    r"sürücü|motor|kasnak|kayış|termistör|ısıtıcı|fişek|baskı tablası|peı|yay çeliği|"
-    r"temizleme filamenti|temizleyici|sprey|tabla|somun|vida|yay|coupler|yazıcı|printer|hazne", re.I
-)
-
-FILAMENT_MUST_HAVE = re.compile(r"filament|pla|petg|abs|tpu|asa|pva|hips|nylon|pa-cf|pet-cf", re.I)
+# KESİN AKSESUAR VE ENGELLENEN YEDEK PARÇALAR
+EXCLUDE_TERMS = [
+    "nozzle", "hotend", "extruder", "kurutucu", "dryer", "dry box", "vakum", "poşet",
+    "reçine", "resin", "3d kalem", "spatula", "yapıştırıcı", "sprey", "rulman", "fan",
+    "kablo", "motor", "kasnak", "kayış", "tabla", "peı", "yay çeliği", "sensör", "sensor"
+]
 
 KNOWN_BRANDS = [
     "Microzey", "Porima", "Filamix", "Beta Filament", "R3D", "Creality", "Anycubic", 
@@ -101,21 +102,15 @@ def price_number(value) -> float | None:
     except ValueError: return None
 
 
-def extract_weight(name: str) -> int:
-    match = re.search(r"(\d+(?:\.\d+)?)\s*(kg|gr|g)\b", name, re.I)
-    if match:
-        val, unit = float(match.group(1)), match.group(2).lower()
-        if unit == "kg": return int(val * 1000)
-        return int(val)
-    return 1000
-
-
 def is_valid_filament(name: str) -> bool:
-    if EXCLUDE_PATTERNS.search(name):
+    name_lower = name.lower()
+    # Aksesuar kontrolü
+    if any(term in name_lower for term in EXCLUDE_TERMS):
         return False
-    if not FILAMENT_MUST_HAVE.search(name):
-        return False
-    return True
+    # Filament kelimesi veya materyal adı geçiyor mu?
+    if "filament" in name_lower or any(m[0].lower() in name_lower for m in MATERIAL_PATTERNS):
+        return True
+    return False
 
 
 def infer(name: str, source: str) -> dict:
@@ -123,8 +118,7 @@ def infer(name: str, source: str) -> dict:
     material = next((label for label, pattern in MATERIAL_PATTERNS if re.search(pattern, upper, re.I)), "PLA")
     color = next((c.title() for c in COLOR_WORDS if c in name.casefold()), "Belirtilmemiş")
     brand = next((b for b in KNOWN_BRANDS if b.casefold() in name.casefold()), source)
-    weight_g = extract_weight(name)
-    return {"brand": brand, "material": material, "color": color, "weight_g": weight_g}
+    return {"brand": brand, "material": material, "color": color, "weight_g": 1000}
 
 
 def save_products(items: list[dict]) -> int:
@@ -149,8 +143,8 @@ def save_products(items: list[dict]) -> int:
                   price=excluded.price, in_stock=excluded.in_stock, image=excluded.image, updated_at=excluded.updated_at""", 
                   (p.get("source"), str(p.get("external_id", "")), name, meta["brand"], meta["material"], meta["color"], meta["weight_g"], price, p.get("old_price"), p.get("in_stock", 1), p.get("url"), p.get("image"), now))
                 saved += 1
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"Kayıt Hatası ({p.get('source')}): {e}", flush=True)
     return saved
 
 
@@ -171,7 +165,6 @@ def scrape_shopify(source: dict, headers: dict) -> list[dict]:
                 for v in p.get("variants", []):
                     v_title = v.get('title', '')
                     full_name = f"{title} {v_title if v_title != 'Default Title' else ''}"
-                    if not is_valid_filament(full_name): continue
                     
                     items.append({
                         "source": source["name"],
@@ -205,11 +198,10 @@ def scrape_woocommerce(source: dict, headers: dict) -> list[dict]:
                 
                 for p in products:
                     name = p.get("name", "")
-                    if not is_valid_filament(name): continue
-                    
                     price = price_number(p.get("price") or (p.get("prices", {}).get("price") if isinstance(p.get("prices"), dict) else None))
+                    
                     if price and price > 0:
-                        if isinstance(price, (int, float)) and price > 10000:  # Kuruş cinsindense TL'ye çevir
+                        if isinstance(price, (int, float)) and price > 10000:
                             price = price / 100.0
                         
                         items.append({
@@ -228,43 +220,8 @@ def scrape_woocommerce(source: dict, headers: dict) -> list[dict]:
     return items
 
 
-def scrape_html_generic(source: dict, headers: dict) -> list[dict]:
-    items = []
-    try:
-        res = requests.get(source["url"], headers=headers, timeout=8)
-        if res.status_code == 200:
-            soup = BeautifulSoup(res.text, 'html.parser')
-            # Sayfadaki tüm kartları ve linkleri tara
-            for a in soup.find_all('a', href=True):
-                title = clean_text(a.text)
-                href = a['href']
-                if not is_valid_filament(title): continue
-                
-                domain = f"{urlparse(source['url']).scheme}://{urlparse(source['url']).netloc}"
-                full_url = urljoin(domain, href)
-                
-                # Kartın çevresindeki fiyatı bul
-                parent = a.find_parent(['div', 'li', 'article']) or a
-                price_elem = parent.find(class_=re.compile(r'price|fiyat|amount', re.I))
-                price = price_number(price_elem.text) if price_elem else None
-                
-                if price and price > 0:
-                    items.append({
-                        "source": source["name"],
-                        "external_id": full_url,
-                        "name": title,
-                        "price": price,
-                        "in_stock": 1,
-                        "url": full_url,
-                        "image": ""
-                    })
-    except Exception as e:
-        pass
-    return items
-
-
 def scrape_source(source: dict) -> list[dict]:
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
     kind = source.get("kind")
     
     items = []
@@ -273,9 +230,6 @@ def scrape_source(source: dict) -> list[dict]:
     elif kind == "woocommerce":
         items = scrape_woocommerce(source, headers)
     
-    if not items:
-        items = scrape_html_generic(source, headers)
-        
     return items
 
 
@@ -283,7 +237,7 @@ def update_all() -> None:
     if not update_lock.acquire(blocking=False): return
     
     update_state.update(running=True, message="Güncelleniyor…")
-    print(">>> KESİNTİSİZ PARALEL TARAMA BAŞLADI <<<", flush=True)
+    print(">>> VERİ TARAMASI BAŞLADI <<<", flush=True)
     
     try:
         if SOURCES_PATH.exists():
@@ -299,12 +253,14 @@ def update_all() -> None:
                         items = future.result()
                         count = save_products(items)
                         total_saved += count
-                        print(f"[{s['name']}] -> {count} adet filament eklendi.", flush=True)
+                        print(f"[{s['name']}] -> {count} adet eklendi.", flush=True)
                     except Exception as e:
                         print(f"[{s['name']}] Hata: {e}", flush=True)
 
-            print(f">>> TOPLAM {total_saved} ADET TEMİZ FİLAMENT EKLENDİ <<<", flush=True)
-            
+            print(f">>> TOPLAM {total_saved} ADET FİLAMENT EKLENDİ <<<", flush=True)
+        else:
+            print("HATA: sources.json dosyası okunamadı!", flush=True)
+
         update_state.update(message="Güncellendi", updated_at=datetime.now().strftime("%d.%m.%Y %H:%M"))
     finally:
         update_state["running"] = False
@@ -353,5 +309,9 @@ def update():
 
 if __name__ == "__main__":
     init_db()
+    
+    # Sunucu her başladığında otomatik olarak arka planda 1 kez güncellesin
+    threading.Thread(target=update_all, daemon=True).start()
+    
     port = int(os.environ.get("PORT", 10000))
     serve(app, host="0.0.0.0", port=port, threads=4)
