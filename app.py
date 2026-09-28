@@ -55,7 +55,7 @@ MATERIAL_PATTERNS = [
     ("PC", r"\bPC\b"), ("PLA", r"\bPLA\b")
 ]
 
-# KESİNLİKLE ENGELLENEN AKSESUAR VE PARÇALAR
+# FİLAMENT DIŞINDAKİ HER ŞEYİ KESİN ŞEKİLDE ENGELLE
 EXCLUDE_PATTERNS = re.compile(
     r"vakum|poşet|saklama|kurutucu|dryer|dry box|sens[oö]r|holder|nozzle|hotend|extruder|"
     r"rulman|fan|kablo|spatula|yapıştırıcı|reçine|resin|3d kalem|yedek parça|modül|kart|"
@@ -63,7 +63,6 @@ EXCLUDE_PATTERNS = re.compile(
     r"temizleme filamenti|temizleyici|sprey|tabla|somun|vida|yay|coupler|yazıcı|printer|hazne", re.I
 )
 
-# SADECE VE SADECE GERÇEK FİLAMENT KABUL ET
 FILAMENT_MUST_HAVE = re.compile(r"filament|pla|petg|abs|tpu|asa|pva|hips|nylon|pa-cf|pet-cf", re.I)
 
 KNOWN_BRANDS = [
@@ -150,8 +149,8 @@ def save_products(items: list[dict]) -> int:
                   price=excluded.price, in_stock=excluded.in_stock, image=excluded.image, updated_at=excluded.updated_at""", 
                   (p.get("source"), str(p.get("external_id", "")), name, meta["brand"], meta["material"], meta["color"], meta["weight_g"], price, p.get("old_price"), p.get("in_stock", 1), p.get("url"), p.get("image"), now))
                 saved += 1
-            except Exception as e:
-                print(f"DB Kayıt hatası: {e}", flush=True)
+            except Exception:
+                pass
     return saved
 
 
@@ -209,16 +208,17 @@ def scrape_woocommerce(source: dict, headers: dict) -> list[dict]:
                     if not is_valid_filament(name): continue
                     
                     price = price_number(p.get("price") or (p.get("prices", {}).get("price") if isinstance(p.get("prices"), dict) else None))
-                    url = p.get("permalink") or p.get("url")
-                    
-                    if name and price and url:
+                    if price and price > 0:
+                        if isinstance(price, (int, float)) and price > 10000:  # Kuruş cinsindense TL'ye çevir
+                            price = price / 100.0
+                        
                         items.append({
                             "source": source["name"],
                             "external_id": str(p.get("id")),
                             "name": name,
                             "price": price,
                             "in_stock": 1,
-                            "url": url,
+                            "url": p.get("permalink") or p.get("url"),
                             "image": (p.get("images") or [{}])[0].get("src", "") if isinstance(p.get("images"), list) else ""
                         })
                 page += 1
@@ -230,85 +230,36 @@ def scrape_woocommerce(source: dict, headers: dict) -> list[dict]:
 
 def scrape_html_generic(source: dict, headers: dict) -> list[dict]:
     items = []
-    domain = f"{urlparse(source['url']).scheme}://{urlparse(source['url']).netloc}"
-    
-    # Kategori / Arama Sayfası
-    urls_to_check = [
-        source["url"],
-        f"{domain}/filament",
-        f"{domain}/filamentler",
-        f"{domain}/3d-filament",
-        f"{domain}/search?q=filament"
-    ]
-    
-    found_urls = set()
-    for u in urls_to_check:
-        try:
-            res = requests.get(u, headers=headers, timeout=6)
-            if res.status_code != 200: continue
+    try:
+        res = requests.get(source["url"], headers=headers, timeout=8)
+        if res.status_code == 200:
             soup = BeautifulSoup(res.text, 'html.parser')
-            
+            # Sayfadaki tüm kartları ve linkleri tara
             for a in soup.find_all('a', href=True):
+                title = clean_text(a.text)
                 href = a['href']
-                text = clean_text(a.text)
-                full = urljoin(domain, href)
-                if ('filament' in href.lower() or 'pla' in href.lower() or 'petg' in href.lower()) and domain in full:
-                    found_urls.add(full)
-        except Exception:
-            continue
-
-    # Bulunan ürün bağlantılarını tara
-    for p_url in list(found_urls)[:60]:
-        try:
-            p_res = requests.get(p_url, headers=headers, timeout=5)
-            if p_res.status_code != 200: continue
-            soup = BeautifulSoup(p_res.text, 'html.parser')
-            
-            title_tag = soup.find('h1') or soup.find(class_=re.compile(r'product-name|title|urun-adi', re.I))
-            if not title_tag: continue
-            title = clean_text(title_tag.text)
-            
-            if not is_valid_filament(title): continue
-            
-            # Fiyat bulma (Çoklu Yöntem)
-            price = None
-            
-            # 1. JSON-LD Schema
-            for script in soup.find_all('script', type='application/ld+json'):
-                try:
-                    data = json.loads(script.string or '')
-                    if isinstance(data, list): data = data[0]
-                    offers = data.get('offers') or data
-                    if isinstance(offers, list): offers = offers[0]
-                    if 'price' in offers:
-                        price = price_number(offers['price'])
-                        break
-                except Exception:
-                    pass
-            
-            # 2. HTML Meta / Tag Sezonu
-            if not price:
-                price_elem = (
-                    soup.find(meta=re.compile(r'price', re.I)) or
-                    soup.find(class_=re.compile(r'price|fiyat|current-price|price-new', re.I)) or
-                    soup.find(id=re.compile(r'price|fiyat', re.I))
-                )
-                if price_elem:
-                    price = price_number(price_elem.get('content') or price_elem.text)
-            
-            if price and price > 0:
-                items.append({
-                    "source": source["name"],
-                    "external_id": p_url,
-                    "name": title,
-                    "price": price,
-                    "in_stock": 1,
-                    "url": p_url,
-                    "image": ""
-                })
-        except Exception:
-            continue
-            
+                if not is_valid_filament(title): continue
+                
+                domain = f"{urlparse(source['url']).scheme}://{urlparse(source['url']).netloc}"
+                full_url = urljoin(domain, href)
+                
+                # Kartın çevresindeki fiyatı bul
+                parent = a.find_parent(['div', 'li', 'article']) or a
+                price_elem = parent.find(class_=re.compile(r'price|fiyat|amount', re.I))
+                price = price_number(price_elem.text) if price_elem else None
+                
+                if price and price > 0:
+                    items.append({
+                        "source": source["name"],
+                        "external_id": full_url,
+                        "name": title,
+                        "price": price,
+                        "in_stock": 1,
+                        "url": full_url,
+                        "image": ""
+                    })
+    except Exception as e:
+        pass
     return items
 
 
@@ -319,10 +270,9 @@ def scrape_source(source: dict) -> list[dict]:
     items = []
     if kind == "shopify":
         items = scrape_shopify(source, headers)
-    
-    # Shopify boş dönerse veya başka tür ise WooCommerce / HTML dene
-    if not items:
+    elif kind == "woocommerce":
         items = scrape_woocommerce(source, headers)
+    
     if not items:
         items = scrape_html_generic(source, headers)
         
@@ -330,12 +280,10 @@ def scrape_source(source: dict) -> list[dict]:
 
 
 def update_all() -> None:
-    if not update_lock.acquire(blocking=False): 
-        print("Güncelleme zaten çalışıyor...", flush=True)
-        return
+    if not update_lock.acquire(blocking=False): return
     
     update_state.update(running=True, message="Güncelleniyor…")
-    print(">>> GELİŞMİŞ PARALEL VERİ TARAMASI BAŞLADI <<<", flush=True)
+    print(">>> KESİNTİSİZ PARALEL TARAMA BAŞLADI <<<", flush=True)
     
     try:
         if SOURCES_PATH.exists():
@@ -343,7 +291,7 @@ def update_all() -> None:
             active_sources = [s for s in sources if s.get("enabled", True)]
             
             total_saved = 0
-            with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
                 future_to_source = {executor.submit(scrape_source, s): s for s in active_sources}
                 for future in concurrent.futures.as_completed(future_to_source):
                     s = future_to_source[future]
@@ -353,7 +301,7 @@ def update_all() -> None:
                         total_saved += count
                         print(f"[{s['name']}] -> {count} adet filament eklendi.", flush=True)
                     except Exception as e:
-                        print(f"[{s['name']}] Tarama hatası: {e}", flush=True)
+                        print(f"[{s['name']}] Hata: {e}", flush=True)
 
             print(f">>> TOPLAM {total_saved} ADET TEMİZ FİLAMENT EKLENDİ <<<", flush=True)
             
