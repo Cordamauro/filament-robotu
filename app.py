@@ -57,10 +57,13 @@ MATERIAL_PATTERNS = [
     ("PC", r"\bPC\b"), ("PLA", r"\bPLA\b")
 ]
 
+# KESİN ENGELLENEN FİLAMENT DIŞI ÜRÜNLER
 EXCLUDE_TERMS = [
-    "nozzle", "hotend", "extruder", "kurutucu", "dryer", "dry box", "vakum poşeti",
-    "reçine", "resin", "3d kalem", "spatula", "sprey", "rulman", "soğutucu fan",
-    "step motor", "baskı tablası", "peı tabla", "sensör", "yazıcı"
+    "nozzle", "hotend", "extruder", "kurutucu", "dryer", "dry box", "vakum", "poşet",
+    "reçine", "resin", "3d kalem", "spatula", "sprey", "rulman", "soğutucu", "fan",
+    "step motor", "baskı tablası", "peı", "tabla", "sensör", "sensor", "yazıcı", "printer",
+    "somun", "vida", "kayış", "kasnak", "fişek", "ısıtıcı", "termistör", "yapıştırıcı",
+    "temizleme filamenti", "temizleyici", "modül", "kart", "sürücü", "coupler"
 ]
 
 KNOWN_BRANDS = [
@@ -101,9 +104,14 @@ def price_number(value) -> float | None:
 
 def is_valid_filament(name: str) -> bool:
     name_lower = name.lower()
+    # Filtre 1: Kesinlikle aksesuar/reçine ise ele
     if any(term in name_lower for term in EXCLUDE_TERMS):
         return False
-    return True
+    # Filtre 2: İçinde filament veya materyal ismi geçmek zorunda
+    has_material = any(re.search(pat[1], name, re.I) for pat in MATERIAL_PATTERNS)
+    if "filament" in name_lower or has_material:
+        return True
+    return False
 
 
 def infer(name: str, source: str) -> dict:
@@ -155,19 +163,28 @@ def scrape_shopify(source: dict, headers: dict) -> list[dict]:
             
             for p in products:
                 title = p.get('title', '')
-                
-                # Görsel URL'sini Düzelt
+                if not is_valid_filament(title): continue
+
                 images = p.get("images") or []
-                img_src = images[0].get("src") if images else ""
-                if img_src.startswith("//"):
-                    img_src = "https:" + img_src
-                elif img_src and not img_src.startswith("http"):
-                    img_src = base_url + "/" + img_src.lstrip("/")
+                # Görsel ID Haritası Olustur
+                img_map = {img.get("id"): img.get("src") for img in images if img.get("id") and img.get("src")}
+                default_img = images[0].get("src") if images else ""
 
                 for v in p.get("variants", []):
                     v_title = v.get('title', '')
                     full_name = f"{title} {v_title if v_title != 'Default Title' else ''}"
                     
+                    if not is_valid_filament(full_name): continue
+
+                    # Varyanta Özel Görsel Bulma
+                    v_img_id = v.get("image_id")
+                    v_img_src = img_map.get(v_img_id) or default_img
+                    
+                    if v_img_src.startswith("//"):
+                        v_img_src = "https:" + v_img_src
+                    elif v_img_src and not v_img_src.startswith("http"):
+                        v_img_src = base_url + "/" + v_img_src.lstrip("/")
+
                     price = price_number(v.get("price"))
                     if price and price > 0:
                         items.append({
@@ -178,7 +195,7 @@ def scrape_shopify(source: dict, headers: dict) -> list[dict]:
                             "old_price": price_number(v.get("compare_at_price")),
                             "in_stock": 1 if v.get("available") else 0,
                             "url": f"{base_url}/products/{p.get('handle')}?variant={v.get('id')}",
-                            "image": img_src
+                            "image": v_img_src
                         })
             page += 1
         except Exception:
