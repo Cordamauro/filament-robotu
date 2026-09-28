@@ -9,7 +9,6 @@ import threading
 import concurrent.futures
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -26,7 +25,6 @@ def data_dir() -> Path:
 APP_DIR = Path(__file__).resolve().parent
 DB_PATH = data_dir() / "filaments_v9.db"
 
-# sources.json bulma garantisi
 SOURCES_PATH = APP_DIR / "sources.json"
 if not SOURCES_PATH.exists():
     SOURCES_PATH = Path(__file__).resolve().parent.parent / "sources.json"
@@ -59,11 +57,11 @@ MATERIAL_PATTERNS = [
     ("PC", r"\bPC\b"), ("PLA", r"\bPLA\b")
 ]
 
-# KESİN AKSESUAR VE ENGELLENEN YEDEK PARÇALAR
+# KESİN AKSESUARLAR (Çok spesifik, filament adını bozmayacak şekilde)
 EXCLUDE_TERMS = [
-    "nozzle", "hotend", "extruder", "kurutucu", "dryer", "dry box", "vakum", "poşet",
-    "reçine", "resin", "3d kalem", "spatula", "yapıştırıcı", "sprey", "rulman", "fan",
-    "kablo", "motor", "kasnak", "kayış", "tabla", "peı", "yay çeliği", "sensör", "sensor"
+    "nozzle", "hotend", "extruder", "kurutucu", "dryer", "dry box", "vakum poşeti",
+    "reçine", "resin", "3d kalem", "spatula", "sprey", "rulman", "soğutucu fan",
+    "step motor", "baskı tablası", "peı tabla", "sensör", "yazıcı"
 ]
 
 KNOWN_BRANDS = [
@@ -104,13 +102,11 @@ def price_number(value) -> float | None:
 
 def is_valid_filament(name: str) -> bool:
     name_lower = name.lower()
-    # Aksesuar kontrolü
+    # Aksesuar engeli
     if any(term in name_lower for term in EXCLUDE_TERMS):
         return False
-    # Filament kelimesi veya materyal adı geçiyor mu?
-    if "filament" in name_lower or any(m[0].lower() in name_lower for m in MATERIAL_PATTERNS):
-        return True
-    return False
+    # Neredeyse her filamenti kabul et
+    return True
 
 
 def infer(name: str, source: str) -> dict:
@@ -144,7 +140,7 @@ def save_products(items: list[dict]) -> int:
                   (p.get("source"), str(p.get("external_id", "")), name, meta["brand"], meta["material"], meta["color"], meta["weight_g"], price, p.get("old_price"), p.get("in_stock", 1), p.get("url"), p.get("image"), now))
                 saved += 1
             except Exception as e:
-                print(f"Kayıt Hatası ({p.get('source')}): {e}", flush=True)
+                pass
     return saved
 
 
@@ -155,7 +151,7 @@ def scrape_shopify(source: dict, headers: dict) -> list[dict]:
     while page <= 10:
         req_url = f"{base_url}/products.json?page={page}&limit=250"
         try:
-            res = requests.get(req_url, headers=headers, timeout=8)
+            res = requests.get(req_url, headers=headers, timeout=10)
             if res.status_code != 200: break
             products = res.json().get("products", [])
             if not products: break
@@ -166,71 +162,32 @@ def scrape_shopify(source: dict, headers: dict) -> list[dict]:
                     v_title = v.get('title', '')
                     full_name = f"{title} {v_title if v_title != 'Default Title' else ''}"
                     
-                    items.append({
-                        "source": source["name"],
-                        "external_id": str(v.get("id")),
-                        "name": full_name,
-                        "price": price_number(v.get("price")),
-                        "old_price": price_number(v.get("compare_at_price")),
-                        "in_stock": 1 if v.get("available") else 0,
-                        "url": f"{base_url}/products/{p.get('handle')}",
-                        "image": (p.get("images") or [{}])[0].get("src")
-                    })
+                    price = price_number(v.get("price"))
+                    if price and price > 0:
+                        items.append({
+                            "source": source["name"],
+                            "external_id": str(v.get("id")),
+                            "name": full_name,
+                            "price": price,
+                            "old_price": price_number(v.get("compare_at_price")),
+                            "in_stock": 1 if v.get("available") else 0,
+                            "url": f"{base_url}/products/{p.get('handle')}?variant={v.get('id')}",
+                            "image": (p.get("images") or [{}])[0].get("src")
+                        })
             page += 1
         except Exception:
             break
     return items
 
 
-def scrape_woocommerce(source: dict, headers: dict) -> list[dict]:
-    items = []
-    base_url = source["url"].rstrip("/")
-    endpoints = ["/wp-json/wc/v3/products", "/wp-json/wc/store/v1/products"]
-    
-    for ep in endpoints:
-        page = 1
-        while page <= 5:
-            try:
-                res = requests.get(f"{base_url}{ep}?per_page=100&page={page}", headers=headers, timeout=8)
-                if res.status_code != 200: break
-                products = res.json()
-                if not products or not isinstance(products, list): break
-                
-                for p in products:
-                    name = p.get("name", "")
-                    price = price_number(p.get("price") or (p.get("prices", {}).get("price") if isinstance(p.get("prices"), dict) else None))
-                    
-                    if price and price > 0:
-                        if isinstance(price, (int, float)) and price > 10000:
-                            price = price / 100.0
-                        
-                        items.append({
-                            "source": source["name"],
-                            "external_id": str(p.get("id")),
-                            "name": name,
-                            "price": price,
-                            "in_stock": 1,
-                            "url": p.get("permalink") or p.get("url"),
-                            "image": (p.get("images") or [{}])[0].get("src", "") if isinstance(p.get("images"), list) else ""
-                        })
-                page += 1
-            except Exception:
-                break
-        if items: break
-    return items
-
-
 def scrape_source(source: dict) -> list[dict]:
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-    kind = source.get("kind")
-    
-    items = []
-    if kind == "shopify":
-        items = scrape_shopify(source, headers)
-    elif kind == "woocommerce":
-        items = scrape_woocommerce(source, headers)
-    
-    return items
+    # Gerçek tarayıcı başlıkları (Kullanıcı gibi görünmek için)
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7'
+    }
+    return scrape_shopify(source, headers)
 
 
 def update_all() -> None:
@@ -245,7 +202,7 @@ def update_all() -> None:
             active_sources = [s for s in sources if s.get("enabled", True)]
             
             total_saved = 0
-            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
                 future_to_source = {executor.submit(scrape_source, s): s for s in active_sources}
                 for future in concurrent.futures.as_completed(future_to_source):
                     s = future_to_source[future]
@@ -258,8 +215,6 @@ def update_all() -> None:
                         print(f"[{s['name']}] Hata: {e}", flush=True)
 
             print(f">>> TOPLAM {total_saved} ADET FİLAMENT EKLENDİ <<<", flush=True)
-        else:
-            print("HATA: sources.json dosyası okunamadı!", flush=True)
 
         update_state.update(message="Güncellendi", updated_at=datetime.now().strftime("%d.%m.%Y %H:%M"))
     finally:
@@ -309,9 +264,6 @@ def update():
 
 if __name__ == "__main__":
     init_db()
-    
-    # Sunucu her başladığında otomatik olarak arka planda 1 kez güncellesin
     threading.Thread(target=update_all, daemon=True).start()
-    
     port = int(os.environ.get("PORT", 10000))
     serve(app, host="0.0.0.0", port=port, threads=4)
