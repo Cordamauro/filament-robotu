@@ -6,12 +6,13 @@
     <title>3D Filament Robotu - Fiyat Karşılaştırma</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { background-color: #f8f9fa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #f4f6f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         .hero { background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%); color: white; padding: 2.5rem 0; margin-bottom: 2rem; }
-        .card { border: none; box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075); transition: transform 0.2s; }
-        .card:hover { transform: translateY(-3px); }
-        .price-tag { font-size: 1.25rem; font-weight: bold; color: #198754; }
-        .badge-brand { background-color: #6c757d; }
+        .card { border: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); transition: transform 0.2s, box-shadow 0.2s; overflow: hidden; }
+        .card:hover { transform: translateY(-4px); box-shadow: 0 8px 20px rgba(0,0,0,0.1); }
+        .product-img-container { height: 180px; background-color: #ffffff; display: flex; align-items: center; justify-content: center; padding: 10px; border-bottom: 1px solid #f0f0f0; }
+        .product-img { max-height: 100%; max-width: 100%; object-fit: contain; }
+        .price-tag { font-size: 1.3rem; font-weight: bold; color: #198754; }
     </style>
 </head>
 <body>
@@ -19,21 +20,20 @@
 <div class="hero">
     <div class="container text-center">
         <h1 class="display-5 fw-bold">🤖 3D Filament Robotu</h1>
-        <p class="lead">20 Farklı Mağazadan Anlık Filament Fiyat Karşılaştırması</p>
+        <p class="lead">Anlık Filament Fiyat Karşılaştırması</p>
         <button id="btnUpdate" class="btn btn-warning btn-lg mt-2 fw-bold" onclick="triggerUpdate()">🔄 Verileri Güncelle</button>
         <div id="updateStatus" class="small mt-2 text-white-50"></div>
     </div>
 </div>
 
-<div class="container">
+<div class="container mb-5">
     <!-- FİLTRELEME BÖLÜMÜ -->
     <div class="card p-3 mb-4">
         <div class="row g-3">
-            <!-- MAĞAZA SEÇİM KUTUSU -->
             <div class="col-md-3">
                 <label class="form-label fw-bold">🏪 Mağaza / Site</label>
                 <select id="filterSource" class="form-select" onchange="loadProducts()">
-                    <option value="">Tüm Siteler (20 Mağaza)</option>
+                    <option value="">Tüm Siteler</option>
                 </select>
             </div>
             
@@ -65,7 +65,7 @@
     </div>
 
     <!-- ÜRÜN LİSTESİ -->
-    <div id="productList" class="row g-3">
+    <div id="productList" class="row g-4">
         <div class="text-center py-5">
             <div class="spinner-border text-primary" role="status"></div>
             <p class="mt-2 text-muted">Filamentler Yükleniyor...</p>
@@ -75,13 +75,17 @@
 
 <script>
 async function loadFilters() {
-    const res = await fetch('/api/filters');
-    const data = await res.json();
-    
-    populateSelect('filterSource', data.source, 'Tüm Siteler (20 Mağaza)');
-    populateSelect('filterBrand', data.brand, 'Tüm Markalar');
-    populateSelect('filterMaterial', data.material, 'Tüm Materyaller');
-    populateSelect('filterColor', data.color, 'Tüm Renkler');
+    try {
+        const res = await fetch('/api/filters');
+        const data = await res.json();
+        
+        populateSelect('filterSource', data.source, 'Tüm Siteler');
+        populateSelect('filterBrand', data.brand, 'Tüm Markalar');
+        populateSelect('filterMaterial', data.material, 'Tüm Materyaller');
+        populateSelect('filterColor', data.color, 'Tüm Renkler');
+    } catch (e) {
+        console.error(e);
+    }
 }
 
 function populateSelect(id, items, defaultText) {
@@ -110,29 +114,38 @@ async function loadProducts() {
     
     const list = document.getElementById('productList');
     if (products.length === 0) {
-        list.innerHTML = `<div class="col-12 text-center py-5"><h4 class="text-muted">Aramanızla eşleşen filament bulunamadı.</h4><p>Lütfen "Verileri Güncelle" butonuna basıp 15 saniye bekleyin.</p></div>`;
+        list.innerHTML = `<div class="col-12 text-center py-5"><h4 class="text-muted">Aramanızla eşleşen filament bulunamadı.</h4><p>Lütfen "Verileri Güncelle" butonuna basıp bekleyin.</p></div>`;
         return;
     }
 
-    list.innerHTML = products.map(p => `
-        <div class="col-md-4 col-lg-3">
-            <div class="card h-100 p-3">
-                <span class="badge bg-secondary mb-2 w-auto align-self-start">${p.source}</span>
-                <h6 class="card-title text-truncate" title="${p.name}">${p.name}</h6>
-                <div class="mb-2">
-                    <span class="badge bg-primary">${p.material}</span>
-                    <span class="badge bg-info text-dark">${p.color}</span>
+    list.innerHTML = products.map(p => {
+        const fallbackImg = "https://via.placeholder.com/300x300?text=3D+Filament";
+        const imgSrc = p.image && p.image.trim() !== "" ? p.image : fallbackImg;
+
+        return `
+        <div class="col-sm-6 col-md-4 col-lg-3">
+            <div class="card h-100">
+                <div class="product-img-container">
+                    <img src="${imgSrc}" class="product-img" alt="${p.name}" onerror="this.onerror=null;this.src='${fallbackImg}';">
                 </div>
-                <div class="mt-auto pt-2 border-top d-flex justify-content-between align-items-center">
-                    <div>
-                        <div class="price-tag">${p.price} TL</div>
-                        <small class="text-muted">${p.kg_price ? Math.round(p.kg_price) + ' TL / kg' : ''}</small>
+                <div class="card-body d-flex flex-column p-3">
+                    <span class="badge bg-secondary mb-2 align-self-start">${p.source}</span>
+                    <h6 class="card-title text-truncate mb-2" title="${p.name}">${p.name}</h6>
+                    <div class="mb-3">
+                        <span class="badge bg-primary">${p.material}</span>
+                        <span class="badge bg-info text-dark">${p.color}</span>
                     </div>
-                    <a href="${p.url}" target="_blank" class="btn btn-sm btn-outline-primary">Siteye Git ↗</a>
+                    <div class="mt-auto pt-2 border-top d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="price-tag">${p.price} TL</div>
+                            <small class="text-muted">${p.kg_price ? Math.round(p.kg_price) + ' TL / kg' : ''}</small>
+                        </div>
+                        <a href="${p.url}" target="_blank" class="btn btn-sm btn-outline-primary fw-semibold">Siteye Git ↗</a>
+                    </div>
                 </div>
             </div>
         </div>
-    `).join('');
+    `}).join('');
 }
 
 async function triggerUpdate() {
@@ -147,7 +160,7 @@ async function triggerUpdate() {
         btn.innerText = '🔄 Verileri Güncelle';
         loadFilters();
         loadProducts();
-    }, 12000);
+    }, 10000);
 }
 
 loadFilters();
