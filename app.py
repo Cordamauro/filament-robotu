@@ -6,18 +6,15 @@ import re
 import sqlite3
 import sys
 import threading
+import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
 from flask import Flask, jsonify, render_template, request
 from waitress import serve
-
-
-def resource_path(name: str) -> Path:
-    base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
-    return base / name
 
 
 def data_dir() -> Path:
@@ -28,13 +25,9 @@ def data_dir() -> Path:
 
 APP_DIR = Path(__file__).resolve().parent
 DB_PATH = data_dir() / "filaments_v9.db"
-SOURCES_PATH = APP_DIR / "sources.json" if (APP_DIR / "sources.json").exists() else resource_path("sources.json")
+SOURCES_PATH = APP_DIR / "sources.json"
 
-templates_dir = APP_DIR / "templates"
-if not templates_dir.exists():
-    templates_dir = resource_path("templates")
-
-app = Flask(__name__, template_folder=str(templates_dir))
+app = Flask(__name__, template_folder=str(APP_DIR / "templates"))
 update_lock = threading.Lock()
 update_state = {"running": False, "message": "Hazır", "updated_at": None}
 
@@ -47,14 +40,36 @@ def disable_browser_cache(response):
     return response
 
 
-COLOR_WORDS = ["siyah", "beyaz", "kırmızı", "mavi", "yeşil", "sarı", "turuncu", "mor", "pembe", "gri", "gümüş", "altın", "kahve", "bej", "mint", "turkuaz", "lila", "şeffaf", "doğal", "naturel", "natural", "bordo", "lacivert", "antrasit"]
+COLOR_WORDS = [
+    "siyah", "beyaz", "kırmızı", "mavi", "yeşil", "sarı", "turuncu", "mor", "pembe", 
+    "gri", "gümüş", "altın", "kahve", "bej", "mint", "turkuaz", "lila", "şeffaf", 
+    "doğal", "naturel", "natural", "bordo", "lacivert", "antrasit", "bronz", "bakır"
+]
+
 MATERIAL_PATTERNS = [
     ("PLA+", r"\bPLA\s*(?:\+|PLUS|PRO)\b"), ("PETG-CF", r"\bPETG[- ]?CF\b"),
+    ("PET-CF", r"\bPET[- ]?CF\d*\b"), ("PA-CF", r"\bPA\d*[- ]?CF\d*|NYLON[- ]?CF\d*"),
     ("PETG", r"\bPETG\b"), ("ABS", r"\bABS\b"), ("PLA-CF", r"\bPLA[- ]?CF\b"), 
     ("ASA", r"\bASA\b"), ("TPU", r"\bTPU\d*(?:[- ]?HF)?\b"), ("PVA", r"\bPVA\b"),
-    ("HIPS", r"\bHIPS\b"), ("PC", r"\bPC\b"), ("PLA", r"\bPLA\b")
+    ("HIPS", r"\bHIPS\b"), ("Naylon/PA", r"\bNYLON\b|\bPA(?:6|12)?\b"),
+    ("PC", r"\bPC\b"), ("PLA", r"\bPLA\b")
 ]
-KNOWN_BRANDS = ["Microzey", "Porima", "Filamix", "Beta Filament", "R3D", "Creality", "Anycubic", "Sunlu", "eSUN", "Polymaker", "Elegoo"]
+
+# Filament DIŞINDAKİ ürünleri tespit edip elemek için katı kelime listesi
+EXCLUDE_PATTERNS = re.compile(
+    r"vakum|poşet|saklama|kurutucu|dryer|dry box|sens[oö]r|holder|nozzle|hotend|extruder|"
+    r"rulman|fan|kablo|spatula|yapıştırıcı|reçine|resin|3d kalem|yedek parça|modül|kart|"
+    r"sürücü|motor|kasnak|kayış|termistör|ısıtıcı|fişek|baskı tablası|peı|yay çeliği|"
+    r"temizleme filamenti|temizleyici|sprey|tabla|somun|vida|yay|coupler|reçine", re.I
+)
+
+# Kesinlikle filament olduğunu doğrulayan anahtar kelimeler
+FILAMENT_MUST_HAVE = re.compile(r"filament|pla|petg|abs|tpu|asa|pva|hips|nylon|pa-cf|pet-cf", re.I)
+
+KNOWN_BRANDS = [
+    "Microzey", "Porima", "Filamix", "Beta Filament", "R3D", "Creality", "Anycubic", 
+    "Sunlu", "eSUN", "Polymaker", "Elegoo", "Spectrum", "Formfutura", "Bambu Lab"
+]
 
 
 def db() -> sqlite3.Connection:
@@ -69,7 +84,7 @@ def init_db() -> None:
           id INTEGER PRIMARY KEY, source TEXT NOT NULL, external_id TEXT, name TEXT NOT NULL,
           brand TEXT, material TEXT, color TEXT, weight_g INTEGER, price REAL, old_price REAL,
           in_stock INTEGER DEFAULT 1, url TEXT NOT NULL, image TEXT, updated_at TEXT,
-          UNIQUE(source, external_id, name)
+          UNIQUE(source, url)
         )""")
 
 
@@ -87,12 +102,31 @@ def price_number(value) -> float | None:
     except ValueError: return None
 
 
+def extract_weight(name: str) -> int:
+    match = re.search(r"(\d+(?:\.\d+)?)\s*(kg|gr|g)\b", name, re.I)
+    if match:
+        val, unit = float(match.group(1)), match.group(2).lower()
+        if unit == "kg": return int(val * 1000)
+        return int(val)
+    return 1000
+
+
+def is_valid_filament(name: str) -> bool:
+    """Sadece gerçek filamentleri kabul eder, aksesuar/reçine ve parçaları eler."""
+    if EXCLUDE_PATTERNS.search(name):
+        return False
+    if not FILAMENT_MUST_HAVE.search(name):
+        return False
+    return True
+
+
 def infer(name: str, source: str) -> dict:
     upper = name.upper()
     material = next((label for label, pattern in MATERIAL_PATTERNS if re.search(pattern, upper, re.I)), "PLA")
     color = next((c.title() for c in COLOR_WORDS if c in name.casefold()), "Belirtilmemiş")
     brand = next((b for b in KNOWN_BRANDS if b.casefold() in name.casefold()), source)
-    return {"brand": brand, "material": material, "color": color, "weight_g": 1000}
+    weight_g = extract_weight(name)
+    return {"brand": brand, "material": material, "color": color, "weight_g": weight_g}
 
 
 def save_products(items: list[dict]) -> int:
@@ -101,64 +135,144 @@ def save_products(items: list[dict]) -> int:
     with db() as conn:
         for p in items:
             name = clean_text(p.get("name"))
-            if not name: continue
+            if not name or not is_valid_filament(name):
+                continue
+                
+            price = p.get("price")
+            if not price or price <= 0:
+                continue
+
             meta = infer(name, p.get("source", ""))
             
             try:
                 conn.execute("""INSERT INTO products(source, external_id, name, brand, material, color, weight_g, price, old_price, in_stock, url, image, updated_at)
                   VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                  ON CONFLICT(source, external_id, name) DO UPDATE SET 
-                  price=excluded.price, in_stock=excluded.in_stock, url=excluded.url, image=excluded.image, updated_at=excluded.updated_at""", 
-                  (p.get("source"), str(p.get("external_id", "")), name, meta["brand"], meta["material"], meta["color"], 1000, p.get("price"), p.get("old_price"), p.get("in_stock", 1), p.get("url"), p.get("image"), now))
+                  ON CONFLICT(source, url) DO UPDATE SET 
+                  price=excluded.price, in_stock=excluded.in_stock, image=excluded.image, updated_at=excluded.updated_at""", 
+                  (p.get("source"), str(p.get("external_id", "")), name, meta["brand"], meta["material"], meta["color"], meta["weight_g"], price, p.get("old_price"), p.get("in_stock", 1), p.get("url"), p.get("image"), now))
                 saved += 1
             except Exception as e:
-                print(f"Kayıt Hatası: {e}", flush=True)
+                pass
     return saved
+
+
+def scrape_shopify(source: dict, headers: dict) -> list[dict]:
+    items = []
+    page = 1
+    while page <= 10:  # Derinlemesine tarama
+        url = f"{source['url']}?page={page}&limit=250"
+        try:
+            res = requests.get(url, headers=headers, timeout=8)
+            if res.status_code != 200: break
+            products = res.json().get("products", [])
+            if not products: break
+            
+            base_url = source['url'].replace('/products.json', '')
+            for p in products:
+                title = p.get('title', '')
+                for v in p.get("variants", []):
+                    v_title = v.get('title', '')
+                    full_name = f"{title} {v_title if v_title != 'Default Title' else ''}"
+                    items.append({
+                        "source": source["name"],
+                        "external_id": str(v.get("id")),
+                        "name": full_name,
+                        "price": price_number(v.get("price")),
+                        "old_price": price_number(v.get("compare_at_price")),
+                        "in_stock": 1 if v.get("available") else 0,
+                        "url": f"{base_url}/products/{p.get('handle')}",
+                        "image": (p.get("images") or [{}])[0].get("src")
+                    })
+            page += 1
+        except Exception:
+            break
+    return items
+
+
+def scrape_sitemap(source: dict, headers: dict) -> list[dict]:
+    items = []
+    sitemap_url = urljoin(source["url"], "/sitemap.xml")
+    try:
+        res = requests.get(sitemap_url, headers=headers, timeout=8)
+        if res.status_code != 200: return items
+        
+        # XML Parse
+        root = ET.fromstring(res.content)
+        urls = [elem.text for elem in root.iter() if elem.tag.endswith('loc') and elem.text]
+        
+        # Sadece ürün bağlantılarını seç
+        product_urls = [u for u in urls if any(k in u.lower() for k in ['/urun/', '/product/', '-filament', 'filament'])]
+        
+        for p_url in product_urls[:100]: # Her siteden en popüler ürünleri tara
+            try:
+                p_res = requests.get(p_url, headers=headers, timeout=5)
+                if p_res.status_code != 200: continue
+                soup = BeautifulSoup(p_res.text, 'html.parser')
+                
+                title_tag = soup.find('h1')
+                if not title_tag: continue
+                title = clean_text(title_tag.text)
+                
+                if not is_valid_filament(title): continue
+                
+                # Fiyat Yakalama
+                price = None
+                price_elem = soup.find(class_=re.compile(r'price|fiyat', re.I))
+                if price_elem:
+                    price = price_number(price_elem.text)
+                
+                if price:
+                    items.append({
+                        "source": source["name"],
+                        "external_id": p_url,
+                        "name": title,
+                        "price": price,
+                        "in_stock": 1,
+                        "url": p_url,
+                        "image": ""
+                    })
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return items
 
 
 def update_all() -> None:
     if not update_lock.acquire(blocking=False): return
+    
     update_state.update(running=True, message="Güncelleniyor…")
-    print(">>> VERİ GÜNCELLEME BAŞLADI <<<", flush=True)
+    print(">>> GELİŞMİŞ VERİ TARAMASI BAŞLADI <<<", flush=True)
     
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
     
     try:
         if SOURCES_PATH.exists():
             sources = json.loads(SOURCES_PATH.read_text(encoding="utf-8"))
+            total_added = 0
+            
             for source in sources:
                 if not source.get("enabled", True): continue
                 print(f"Tarama yapılıyor: {source['name']}", flush=True)
                 
-                # Shopify Mağazaları Taraması
-                if source.get("kind") == "shopify":
-                    try:
-                        res = requests.get(source["url"], headers=headers, timeout=10)
-                        if res.status_code == 200:
-                            data = res.json().get("products", [])
-                            items = []
-                            for p in data:
-                                for v in p.get("variants", []):
-                                    items.append({
-                                        "source": source["name"],
-                                        "external_id": str(v.get("id")),
-                                        "name": f"{p.get('title')} {v.get('title') if v.get('title') != 'Default Title' else ''}",
-                                        "price": price_number(v.get("price")),
-                                        "old_price": price_number(v.get("compare_at_price")),
-                                        "in_stock": 1 if v.get("available") else 0,
-                                        "url": f"{source['url'].replace('/products.json', '')}/products/{p.get('handle')}",
-                                        "image": (p.get("images") or [{}])[0].get("src")
-                                    })
-                            count = save_products(items)
-                            print(f"{source['name']} -> {count} ürün kaydedildi.", flush=True)
-                    except Exception as e:
-                        print(f"Hata ({source['name']}): {e}", flush=True)
+                items = []
+                kind = source.get("kind")
+                
+                if kind == "shopify":
+                    items = scrape_shopify(source, headers)
+                elif kind in ["sitemap", "jsonld"]:
+                    items = scrape_sitemap(source, headers)
+                
+                count = save_products(items)
+                total_added += count
+                print(f"-> {source['name']}: {count} adet temiz filament eklendi.", flush=True)
 
+            print(f">>> TOPLAM {total_added} ADET SADECE FİLAMENT KAYDEDİLDİ <<<", flush=True)
+            
         update_state.update(message="Güncellendi", updated_at=datetime.now().strftime("%d.%m.%Y %H:%M"))
     finally:
         update_state["running"] = False
         update_lock.release()
-        print(">>> VERİ GÜNCELLEME BİTTİ <<<", flush=True)
 
 
 @app.get("/")
@@ -179,7 +293,7 @@ def products():
     
     sql = "SELECT *, CASE WHEN weight_g > 0 THEN price * 1000.0 / weight_g END AS kg_price FROM products"
     if filters: sql += " WHERE " + " AND ".join(filters)
-    sql += " ORDER BY price ASC LIMIT 500"
+    sql += " ORDER BY price ASC LIMIT 1000"
     
     with db() as conn: rows = [dict(r) for r in conn.execute(sql, params)]
     return jsonify(rows)
