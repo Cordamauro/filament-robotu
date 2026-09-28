@@ -57,7 +57,6 @@ MATERIAL_PATTERNS = [
     ("PC", r"\bPC\b"), ("PLA", r"\bPLA\b")
 ]
 
-# KESİN AKSESUARLAR (Çok spesifik, filament adını bozmayacak şekilde)
 EXCLUDE_TERMS = [
     "nozzle", "hotend", "extruder", "kurutucu", "dryer", "dry box", "vakum poşeti",
     "reçine", "resin", "3d kalem", "spatula", "sprey", "rulman", "soğutucu fan",
@@ -102,10 +101,8 @@ def price_number(value) -> float | None:
 
 def is_valid_filament(name: str) -> bool:
     name_lower = name.lower()
-    # Aksesuar engeli
     if any(term in name_lower for term in EXCLUDE_TERMS):
         return False
-    # Neredeyse her filamenti kabul et
     return True
 
 
@@ -139,7 +136,7 @@ def save_products(items: list[dict]) -> int:
                   price=excluded.price, in_stock=excluded.in_stock, image=excluded.image, updated_at=excluded.updated_at""", 
                   (p.get("source"), str(p.get("external_id", "")), name, meta["brand"], meta["material"], meta["color"], meta["weight_g"], price, p.get("old_price"), p.get("in_stock", 1), p.get("url"), p.get("image"), now))
                 saved += 1
-            except Exception as e:
+            except Exception:
                 pass
     return saved
 
@@ -158,6 +155,15 @@ def scrape_shopify(source: dict, headers: dict) -> list[dict]:
             
             for p in products:
                 title = p.get('title', '')
+                
+                # Görsel URL'sini Düzelt
+                images = p.get("images") or []
+                img_src = images[0].get("src") if images else ""
+                if img_src.startswith("//"):
+                    img_src = "https:" + img_src
+                elif img_src and not img_src.startswith("http"):
+                    img_src = base_url + "/" + img_src.lstrip("/")
+
                 for v in p.get("variants", []):
                     v_title = v.get('title', '')
                     full_name = f"{title} {v_title if v_title != 'Default Title' else ''}"
@@ -172,7 +178,7 @@ def scrape_shopify(source: dict, headers: dict) -> list[dict]:
                             "old_price": price_number(v.get("compare_at_price")),
                             "in_stock": 1 if v.get("available") else 0,
                             "url": f"{base_url}/products/{p.get('handle')}?variant={v.get('id')}",
-                            "image": (p.get("images") or [{}])[0].get("src")
+                            "image": img_src
                         })
             page += 1
         except Exception:
@@ -181,7 +187,6 @@ def scrape_shopify(source: dict, headers: dict) -> list[dict]:
 
 
 def scrape_source(source: dict) -> list[dict]:
-    # Gerçek tarayıcı başlıkları (Kullanıcı gibi görünmek için)
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
