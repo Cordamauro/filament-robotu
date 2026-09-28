@@ -1,122 +1,22 @@
 [
-  {
-    "name": "Microzey",
-    "kind": "shopify",
-    "url": "https://microzey.com/products.json",
-    "enabled": true
-  },
-  {
-    "name": "Porima 3D",
-    "kind": "shopify",
-    "url": "https://porima3d.com/products.json",
-    "enabled": true
-  },
-  {
-    "name": "Teknik Filament 3D",
-    "kind": "shopify",
-    "url": "https://www.teknikfilament3d.com/products.json",
-    "enabled": true
-  },
-  {
-    "name": "Senin Fabrikan",
-    "kind": "sitemap",
-    "url": "https://seninfabrikan.com",
-    "enabled": true
-  },
-  {
-    "name": "Teknoer Bilişim",
-    "kind": "sitemap",
-    "url": "https://market.teknoerbilisim.com",
-    "enabled": true
-  },
-  {
-    "name": "Robitshop",
-    "kind": "sitemap",
-    "url": "https://www.robitshop.com",
-    "enabled": true
-  },
-  {
-    "name": "3D Teknomarket",
-    "kind": "sitemap",
-    "url": "https://www.3dteknomarket.com",
-    "enabled": true
-  },
-  {
-    "name": "Flexis3D",
-    "kind": "sitemap",
-    "url": "https://flexis3d.com",
-    "enabled": true
-  },
-  {
-    "name": "3Dcim",
-    "kind": "sitemap",
-    "url": "https://3dcim.com",
-    "enabled": true
-  },
-  {
-    "name": "Filament Marketim",
-    "kind": "sitemap",
-    "url": "https://www.filamentmarketim.com",
-    "enabled": true
-  },
-  {
-    "name": "Domirobot",
-    "kind": "sitemap",
-    "url": "https://www.domirobot.com",
-    "enabled": true
-  },
-  {
-    "name": "Filamentsan",
-    "kind": "sitemap",
-    "url": "https://filamentsan.com",
-    "enabled": true
-  },
-  {
-    "name": "Robotistan",
-    "kind": "sitemap",
-    "url": "https://www.robotistan.com",
-    "enabled": true
-  },
-  {
-    "name": "Rhino 3D Printer",
-    "kind": "sitemap",
-    "url": "https://www.rhino3dprinter.com",
-    "enabled": true
-  },
-  {
-    "name": "Matersan",
-    "kind": "sitemap",
-    "url": "https://www.matersan.com.tr",
-    "enabled": true
-  },
-  {
-    "name": "Robo90",
-    "kind": "sitemap",
-    "url": "https://www.robo90.com",
-    "enabled": true
-  },
-  {
-    "name": "Robolink Market",
-    "kind": "sitemap",
-    "url": "https://www.robolinkmarket.com",
-    "enabled": true
-  },
-  {
-    "name": "Maker Pazar",
-    "kind": "sitemap",
-    "url": "https://makerpazar.com",
-    "enabled": true
-  },
-  {
-    "name": "Fixx3D",
-    "kind": "sitemap",
-    "url": "https://fixx3d.com",
-    "enabled": true
-  },
-  {
-    "name": "Print3D",
-    "kind": "jsonld",
-    "url": "https://www.print3d.com.tr",
-    "enabled": true
-  }
+  { "name": "Porima 3D", "kind": "shopify", "url": "https://porima3d.com/products.json", "enabled": true },
+  { "name": "Microzey", "kind": "shopify", "url": "https://microzey.com/products.json", "enabled": true },
+  { "name": "Teknik Filament 3D", "kind": "shopify", "url": "https://www.teknikfilament3d.com/products.json", "enabled": true },
+  { "name": "Flexis3D", "kind": "shopify", "url": "https://flexis3d.com/products.json", "enabled": true },
+  { "name": "3Dcim", "kind": "shopify", "url": "https://3dcim.com/products.json", "enabled": true },
+  { "name": "Filament Marketim", "kind": "woocommerce", "url": "https://www.filamentmarketim.com", "enabled": true },
+  { "name": "Robotistan", "kind": "woocommerce", "url": "https://www.robotistan.com", "enabled": true },
+  { "name": "Robo90", "kind": "woocommerce", "url": "https://www.robo90.com", "enabled": true },
+  { "name": "Robolink Market", "kind": "woocommerce", "url": "https://www.robolinkmarket.com", "enabled": true },
+  { "name": "Maker Pazar", "kind": "woocommerce", "url": "https://makerpazar.com", "enabled": true },
+  { "name": "Senin Fabrikan", "kind": "html", "url": "https://seninfabrikan.com/filament", "enabled": true },
+  { "name": "Teknoer Bilişim", "kind": "html", "url": "https://market.teknoerbilisim.com/filament", "enabled": true },
+  { "name": "Robitshop", "kind": "html", "url": "https://www.robitshop.com/kategori/filamentler", "enabled": true },
+  { "name": "3D Teknomarket", "kind": "html", "url": "https://www.3dteknomarket.com/kategori/filamentler", "enabled": true },
+  { "name": "Domirobot", "kind": "html", "url": "https://www.domirobot.com/kategori/3d-filamentler", "enabled": true },
+  { "name": "Filamentsan", "kind": "html", "url": "https://filamentsan.com/kategori/filamentler", "enabled": true },
+  { "name": "Rhino 3D Printer", "kind": "html", "url": "https://www.rhino3dprinter.com/kategori/filamentler", "enabled": true },
+  { "name": "Matersan", "kind": "html", "url": "https://www.matersan.com.tr/kategori/filamentler", "enabled": true },
+  { "name": "Fixx3D", "kind": "html", "url": "https://fixx3d.com/kategori/filament", "enabled": true },
+  { "name": "Print3D", "kind": "html", "url": "https://www.print3d.com.tr/kategori/3d-filament", "enabled": true }
 ]
