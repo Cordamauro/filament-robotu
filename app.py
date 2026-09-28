@@ -55,15 +55,15 @@ MATERIAL_PATTERNS = [
     ("PC", r"\bPC\b"), ("PLA", r"\bPLA\b")
 ]
 
-# Filament DIŞINDAKİ ürünleri tespit edip elemek için katı kelime listesi
+# KESİNLİKLE ENGELENEN AKSESUAR VE PARÇALAR (FİLTRE)
 EXCLUDE_PATTERNS = re.compile(
     r"vakum|poşet|saklama|kurutucu|dryer|dry box|sens[oö]r|holder|nozzle|hotend|extruder|"
     r"rulman|fan|kablo|spatula|yapıştırıcı|reçine|resin|3d kalem|yedek parça|modül|kart|"
     r"sürücü|motor|kasnak|kayış|termistör|ısıtıcı|fişek|baskı tablası|peı|yay çeliği|"
-    r"temizleme filamenti|temizleyici|sprey|tabla|somun|vida|yay|coupler|reçine", re.I
+    r"temizleme filamenti|temizleyici|sprey|tabla|somun|vida|yay|coupler|yazıcı|printer|hazne", re.I
 )
 
-# Kesinlikle filament olduğunu doğrulayan anahtar kelimeler
+# SADECE VE SADECE GERÇEK FİLAMENT KABUL ET
 FILAMENT_MUST_HAVE = re.compile(r"filament|pla|petg|abs|tpu|asa|pva|hips|nylon|pa-cf|pet-cf", re.I)
 
 KNOWN_BRANDS = [
@@ -112,7 +112,7 @@ def extract_weight(name: str) -> int:
 
 
 def is_valid_filament(name: str) -> bool:
-    """Sadece gerçek filamentleri kabul eder, aksesuar/reçine ve parçaları eler."""
+    """Aksesuar, reçine ve 3D yazıcı parçalarını kesinlikle eler."""
     if EXCLUDE_PATTERNS.search(name):
         return False
     if not FILAMENT_MUST_HAVE.search(name):
@@ -151,7 +151,7 @@ def save_products(items: list[dict]) -> int:
                   price=excluded.price, in_stock=excluded.in_stock, image=excluded.image, updated_at=excluded.updated_at""", 
                   (p.get("source"), str(p.get("external_id", "")), name, meta["brand"], meta["material"], meta["color"], meta["weight_g"], price, p.get("old_price"), p.get("in_stock", 1), p.get("url"), p.get("image"), now))
                 saved += 1
-            except Exception as e:
+            except Exception:
                 pass
     return saved
 
@@ -159,7 +159,7 @@ def save_products(items: list[dict]) -> int:
 def scrape_shopify(source: dict, headers: dict) -> list[dict]:
     items = []
     page = 1
-    while page <= 10:  # Derinlemesine tarama
+    while page <= 25:  # Tüm sayfaları derinlemesine çek
         url = f"{source['url']}?page={page}&limit=250"
         try:
             res = requests.get(url, headers=headers, timeout=8)
@@ -173,6 +173,8 @@ def scrape_shopify(source: dict, headers: dict) -> list[dict]:
                 for v in p.get("variants", []):
                     v_title = v.get('title', '')
                     full_name = f"{title} {v_title if v_title != 'Default Title' else ''}"
+                    if not is_valid_filament(full_name): continue
+                    
                     items.append({
                         "source": source["name"],
                         "external_id": str(v.get("id")),
@@ -196,14 +198,13 @@ def scrape_sitemap(source: dict, headers: dict) -> list[dict]:
         res = requests.get(sitemap_url, headers=headers, timeout=8)
         if res.status_code != 200: return items
         
-        # XML Parse
         root = ET.fromstring(res.content)
         urls = [elem.text for elem in root.iter() if elem.tag.endswith('loc') and elem.text]
         
-        # Sadece ürün bağlantılarını seç
-        product_urls = [u for u in urls if any(k in u.lower() for k in ['/urun/', '/product/', '-filament', 'filament'])]
+        # Filament içeren tüm ürün linklerini süz
+        product_urls = [u for u in urls if 'filament' in u.lower()]
         
-        for p_url in product_urls[:100]: # Her siteden en popüler ürünleri tara
+        for p_url in product_urls[:200]:
             try:
                 p_res = requests.get(p_url, headers=headers, timeout=5)
                 if p_res.status_code != 200: continue
@@ -215,7 +216,6 @@ def scrape_sitemap(source: dict, headers: dict) -> list[dict]:
                 
                 if not is_valid_filament(title): continue
                 
-                # Fiyat Yakalama
                 price = None
                 price_elem = soup.find(class_=re.compile(r'price|fiyat', re.I))
                 if price_elem:
@@ -242,18 +242,13 @@ def update_all() -> None:
     if not update_lock.acquire(blocking=False): return
     
     update_state.update(running=True, message="Güncelleniyor…")
-    print(">>> GELİŞMİŞ VERİ TARAMASI BAŞLADI <<<", flush=True)
-    
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
     
     try:
         if SOURCES_PATH.exists():
             sources = json.loads(SOURCES_PATH.read_text(encoding="utf-8"))
-            total_added = 0
-            
             for source in sources:
                 if not source.get("enabled", True): continue
-                print(f"Tarama yapılıyor: {source['name']}", flush=True)
                 
                 items = []
                 kind = source.get("kind")
@@ -263,12 +258,8 @@ def update_all() -> None:
                 elif kind in ["sitemap", "jsonld"]:
                     items = scrape_sitemap(source, headers)
                 
-                count = save_products(items)
-                total_added += count
-                print(f"-> {source['name']}: {count} adet temiz filament eklendi.", flush=True)
-
-            print(f">>> TOPLAM {total_added} ADET SADECE FİLAMENT KAYDEDİLDİ <<<", flush=True)
-            
+                save_products(items)
+                
         update_state.update(message="Güncellendi", updated_at=datetime.now().strftime("%d.%m.%Y %H:%M"))
     finally:
         update_state["running"] = False
