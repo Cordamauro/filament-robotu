@@ -9,6 +9,7 @@ import threading
 import concurrent.futures
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -149,117 +150,212 @@ def save_products(items: list[dict]) -> int:
                   price=excluded.price, in_stock=excluded.in_stock, image=excluded.image, updated_at=excluded.updated_at""", 
                   (p.get("source"), str(p.get("external_id", "")), name, meta["brand"], meta["material"], meta["color"], meta["weight_g"], price, p.get("old_price"), p.get("in_stock", 1), p.get("url"), p.get("image"), now))
                 saved += 1
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"DB Kayıt hatası: {e}", flush=True)
     return saved
 
 
-def scrape_source(source: dict) -> list[dict]:
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+def scrape_shopify(source: dict, headers: dict) -> list[dict]:
     items = []
-    kind = source.get("kind")
-    name = source.get("name")
-    url = source.get("url")
+    page = 1
+    base_url = source["url"].split("/products.json")[0].rstrip("/")
+    while page <= 10:
+        req_url = f"{base_url}/products.json?page={page}&limit=250"
+        try:
+            res = requests.get(req_url, headers=headers, timeout=8)
+            if res.status_code != 200: break
+            products = res.json().get("products", [])
+            if not products: break
+            
+            for p in products:
+                title = p.get('title', '')
+                for v in p.get("variants", []):
+                    v_title = v.get('title', '')
+                    full_name = f"{title} {v_title if v_title != 'Default Title' else ''}"
+                    if not is_valid_filament(full_name): continue
+                    
+                    items.append({
+                        "source": source["name"],
+                        "external_id": str(v.get("id")),
+                        "name": full_name,
+                        "price": price_number(v.get("price")),
+                        "old_price": price_number(v.get("compare_at_price")),
+                        "in_stock": 1 if v.get("available") else 0,
+                        "url": f"{base_url}/products/{p.get('handle')}",
+                        "image": (p.get("images") or [{}])[0].get("src")
+                    })
+            page += 1
+        except Exception:
+            break
+    return items
 
-    try:
-        if kind == "shopify":
-            page = 1
-            while page <= 10:
-                req_url = f"{url}?page={page}&limit=250"
-                res = requests.get(req_url, headers=headers, timeout=5)
+
+def scrape_woocommerce(source: dict, headers: dict) -> list[dict]:
+    items = []
+    base_url = source["url"].rstrip("/")
+    endpoints = ["/wp-json/wc/v3/products", "/wp-json/wc/store/v1/products"]
+    
+    for ep in endpoints:
+        page = 1
+        while page <= 5:
+            try:
+                res = requests.get(f"{base_url}{ep}?per_page=100&page={page}", headers=headers, timeout=8)
                 if res.status_code != 200: break
-                products = res.json().get("products", [])
-                if not products: break
+                products = res.json()
+                if not products or not isinstance(products, list): break
                 
-                base_url = url.replace('/products.json', '')
                 for p in products:
-                    title = p.get('title', '')
-                    for v in p.get("variants", []):
-                        v_title = v.get('title', '')
-                        full_name = f"{title} {v_title if v_title != 'Default Title' else ''}"
-                        if not is_valid_filament(full_name): continue
-                        
+                    name = p.get("name", "")
+                    if not is_valid_filament(name): continue
+                    
+                    price = price_number(p.get("price") or (p.get("prices", {}).get("price") if isinstance(p.get("prices"), dict) else None))
+                    url = p.get("permalink") or p.get("url")
+                    
+                    if name and price and url:
                         items.append({
-                            "source": name,
-                            "external_id": str(v.get("id")),
-                            "name": full_name,
-                            "price": price_number(v.get("price")),
-                            "old_price": price_number(v.get("compare_at_price")),
-                            "in_stock": 1 if v.get("available") else 0,
-                            "url": f"{base_url}/products/{p.get('handle')}",
-                            "image": (p.get("images") or [{}])[0].get("src")
+                            "source": source["name"],
+                            "external_id": str(p.get("id")),
+                            "name": name,
+                            "price": price,
+                            "in_stock": 1,
+                            "url": url,
+                            "image": (p.get("images") or [{}])[0].get("src", "") if isinstance(p.get("images"), list) else ""
                         })
                 page += 1
+            except Exception:
+                break
+        if items: break
+    return items
 
-        else:
-            # Genel E-ticaret / Sitemap / HTML Taraması
-            res = requests.get(url, headers=headers, timeout=6)
-            if res.status_code == 200:
-                soup = BeautifulSoup(res.text, 'html.parser')
-                links = soup.find_all('a', href=True)
-                filament_urls = set()
-                
-                for link in links:
-                    href = link['href']
-                    full_href = href if href.startswith('http') else os.path.join(url, href.lstrip('/'))
-                    if 'filament' in href.lower() or 'pla' in href.lower() or 'petg' in href.lower():
-                        filament_urls.add(full_href)
 
-                for p_url in list(filament_urls)[:40]:
-                    try:
-                        p_res = requests.get(p_url, headers=headers, timeout=4)
-                        if p_res.status_code != 200: continue
-                        p_soup = BeautifulSoup(p_res.text, 'html.parser')
-                        
-                        title_tag = p_soup.find('h1')
-                        if not title_tag: continue
-                        title = clean_text(title_tag.text)
-                        
-                        if not is_valid_filament(title): continue
-                        
-                        price = None
-                        price_elem = p_soup.find(class_=re.compile(r'price|fiyat|amount', re.I))
-                        if price_elem:
-                            price = price_number(price_elem.text)
-                        
-                        if price:
-                            items.append({
-                                "source": name,
-                                "external_id": p_url,
-                                "name": title,
-                                "price": price,
-                                "in_stock": 1,
-                                "url": p_url,
-                                "image": ""
-                            })
-                    except Exception:
-                        continue
-    except Exception as e:
-        print(f"Hata ({name}): {e}", flush=True)
+def scrape_html_generic(source: dict, headers: dict) -> list[dict]:
+    items = []
+    domain = f"{urlparse(source['url']).scheme}://{urlparse(source['url']).netloc}"
+    
+    # Kategori / Arama Sayfası
+    urls_to_check = [
+        source["url"],
+        f"{domain}/filament",
+        f"{domain}/filamentler",
+        f"{domain}/3d-filament",
+        f"{domain}/search?q=filament"
+    ]
+    
+    found_urls = set()
+    for u in urls_to_check:
+        try:
+            res = requests.get(u, headers=headers, timeout=6)
+            if res.status_code != 200: continue
+            soup = BeautifulSoup(res.text, 'html.parser')
+            
+            for a in soup.find_all('a', href=True):
+                href = a['href']
+                text = clean_text(a.text)
+                full = urljoin(domain, href)
+                if ('filament' in href.lower() or 'pla' in href.lower() or 'petg' in href.lower()) and domain in full:
+                    found_urls.add(full)
+        except Exception:
+            continue
 
+    # Bulunan ürün bağlantılarını tara
+    for p_url in list(found_urls)[:60]:
+        try:
+            p_res = requests.get(p_url, headers=headers, timeout=5)
+            if p_res.status_code != 200: continue
+            soup = BeautifulSoup(p_res.text, 'html.parser')
+            
+            title_tag = soup.find('h1') or soup.find(class_=re.compile(r'product-name|title|urun-adi', re.I))
+            if not title_tag: continue
+            title = clean_text(title_tag.text)
+            
+            if not is_valid_filament(title): continue
+            
+            # Fiyat bulma (Çoklu Yöntem)
+            price = None
+            
+            # 1. JSON-LD Schema
+            for script in soup.find_all('script', type='application/ld+json'):
+                try:
+                    data = json.loads(script.string or '')
+                    if isinstance(data, list): data = data[0]
+                    offers = data.get('offers') or data
+                    if isinstance(offers, list): offers = offers[0]
+                    if 'price' in offers:
+                        price = price_number(offers['price'])
+                        break
+                except Exception:
+                    pass
+            
+            # 2. HTML Meta / Tag Sezonu
+            if not price:
+                price_elem = (
+                    soup.find(meta=re.compile(r'price', re.I)) or
+                    soup.find(class_=re.compile(r'price|fiyat|current-price|price-new', re.I)) or
+                    soup.find(id=re.compile(r'price|fiyat', re.I))
+                )
+                if price_elem:
+                    price = price_number(price_elem.get('content') or price_elem.text)
+            
+            if price and price > 0:
+                items.append({
+                    "source": source["name"],
+                    "external_id": p_url,
+                    "name": title,
+                    "price": price,
+                    "in_stock": 1,
+                    "url": p_url,
+                    "image": ""
+                })
+        except Exception:
+            continue
+            
+    return items
+
+
+def scrape_source(source: dict) -> list[dict]:
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+    kind = source.get("kind")
+    
+    items = []
+    if kind == "shopify":
+        items = scrape_shopify(source, headers)
+    
+    # Shopify boş dönerse veya başka tür ise WooCommerce / HTML dene
+    if not items:
+        items = scrape_woocommerce(source, headers)
+    if not items:
+        items = scrape_html_generic(source, headers)
+        
     return items
 
 
 def update_all() -> None:
-    if not update_lock.acquire(blocking=False): return
+    if not update_lock.acquire(blocking=False): 
+        print("Güncelleme zaten çalışıyor...", flush=True)
+        return
     
     update_state.update(running=True, message="Güncelleniyor…")
-    print(">>> PARALEL VERİ TARAMASI BAŞLADI <<<", flush=True)
+    print(">>> GELİŞMİŞ PARALEL VERİ TARAMASI BAŞLADI <<<", flush=True)
     
     try:
         if SOURCES_PATH.exists():
             sources = json.loads(SOURCES_PATH.read_text(encoding="utf-8"))
             active_sources = [s for s in sources if s.get("enabled", True)]
             
-            # 20 Mağazayı Paralel Olarak Aynı Anda Tara
-            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-                results = executor.map(scrape_source, active_sources)
-                
-                for items in results:
-                    if items:
-                        save_products(items)
+            total_saved = 0
+            with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+                future_to_source = {executor.submit(scrape_source, s): s for s in active_sources}
+                for future in concurrent.futures.as_completed(future_to_source):
+                    s = future_to_source[future]
+                    try:
+                        items = future.result()
+                        count = save_products(items)
+                        total_saved += count
+                        print(f"[{s['name']}] -> {count} adet filament eklendi.", flush=True)
+                    except Exception as e:
+                        print(f"[{s['name']}] Tarama hatası: {e}", flush=True)
 
-            print(">>> TÜM MAĞAZALAR TARANDI VE KAYDEDİLDİ <<<", flush=True)
+            print(f">>> TOPLAM {total_saved} ADET TEMİZ FİLAMENT EKLENDİ <<<", flush=True)
             
         update_state.update(message="Güncellendi", updated_at=datetime.now().strftime("%d.%m.%Y %H:%M"))
     finally:
