@@ -56,6 +56,7 @@ COLOR_MAP = {
 }
 
 MATERIALS = ["PLA", "PETG", "ABS", "TPU", "PVA", "ASA", "PC", "PA", "NYLON", "CARBON"]
+EXCLUDE_KEYWORDS = ["PRINTER", "YAZICI", "YEDEK", "PARÇA", "NOZZLE", "RESIN", "REÇİNE", "CURE", "WASH", "SCANNER", "TARAYICI", "MODÜL", "DRY BOX"]
 
 def detect_material(name):
     name_upper = name.upper()
@@ -72,26 +73,45 @@ def detect_color(name):
                 return main_color
     return "Mavi"
 
-# --- PORİMA İÇİN OTO-GÖRSEL EŞLEŞTİRMELİ SHOPIFY SCRAPER ---
+def is_filament_product(title, product_type):
+    full_text = f"{title} {product_type}".upper()
+    for exc in EXCLUDE_KEYWORDS:
+        if exc in full_text:
+            return False
+    return True
+
+# --- KUSURSUZ SAYFALAMALI VE GÖRSEL MANTIKLI PORİMA SCRAPER ---
 def scrape_shopify(source_name, base_url):
     products = []
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-    try:
-        url = base_url if base_url.endswith("/products.json") else f"{base_url.rstrip('/')}/products.json"
-        res = requests.get(url, headers=headers, timeout=15)
-        if res.status_code == 200:
-            data = res.json()
-            for p in data.get("products", []):
-                title = p.get("title", "")
-                brand = p.get("vendor") or source_name
+    
+    clean_base = base_url.split('?')[0].replace('/products.json', '').rstrip('/')
+    
+    page = 1
+    while True:
+        try:
+            url = f"{clean_base}/products.json?limit=250&page={page}"
+            res = requests.get(url, headers=headers, timeout=15)
+            if res.status_code != 200:
+                break
                 
-                # Görsel Haritası (featured_image yoksa varyant resmini veya ana resmi eşleştir)
+            data = res.json()
+            raw_products = data.get("products", [])
+            if not raw_products:
+                break
+                
+            for p in raw_products:
+                title = p.get("title", "")
+                product_type = p.get("product_type", "")
+                
+                # Sadece gerçek filament ürünlerini al
+                if not is_filament_product(title, product_type):
+                    continue
+                    
+                brand = p.get("vendor") or source_name
                 images = p.get("images", [])
                 main_image = images[0]["src"] if images else ""
                 
-                # Varyant görsel id haritası
-                img_dict = {img.get("id"): img.get("src") for img in images if img.get("id")}
-
                 for v in p.get("variants", []):
                     if not v.get("available", False):
                         continue
@@ -103,12 +123,12 @@ def scrape_shopify(source_name, base_url):
                     v_title = v.get("title", "")
                     full_name = f"{title} - {v_title}" if v_title and v_title != "Default Title" else title
                     
-                    # Varyanta özel resim varsa onu al, yoksa ana resmi al
-                    v_img_id = v.get("image_id")
-                    image_url = img_dict.get(v_img_id, main_image)
+                    # Görsel seçimi: Varyanta özel görsel -> Yoksa ana resim
+                    feat_img = v.get("featured_image")
+                    image_url = feat_img.get("src") if (feat_img and isinstance(feat_img, dict) and feat_img.get("src")) else main_image
                     
                     prod_id = f"{source_name}_{v.get('id')}"
-                    prod_url = f"{base_url.replace('/products.json', '')}/products/{p.get('handle')}"
+                    prod_url = f"{clean_base}/products/{p.get('handle')}"
                     
                     products.append({
                         "id": prod_id,
@@ -123,11 +143,19 @@ def scrape_shopify(source_name, base_url):
                         "url": prod_url,
                         "image": image_url
                     })
-    except Exception as e:
-        print(f"Scrape Hatası ({source_name}): {e}")
+            
+            # Eğer gelen ürün sayısı 250'den azsa son sayfaya gelinmiştir
+            if len(raw_products) < 250:
+                break
+            page += 1
+            
+        except Exception as e:
+            print(f"Scrape Hatası ({source_name}): {e}")
+            break
+            
     return products
 
-# --- ROBITSHOP SCRAPER ---
+# --- ROBITSHOP SCRAPER (PORİMA'DAN BAĞIMSIZ) ---
 def scrape_robitshop():
     products = []
     headers = {
@@ -231,7 +259,7 @@ def update_all_data():
         if "porima" in name.lower() or "shopify" in src.get("kind", "").lower() or "json" in url:
             prods = scrape_shopify(name, url)
             all_products.extend(prods)
-            print(f"[{name}] -> {len(prods)} adet tam filament eklendi.")
+            print(f"[{name}] -> {len(prods)} adet filament eklendi.")
         elif "robitshop" in name.lower():
             prods = scrape_robitshop()
             all_products.extend(prods)
