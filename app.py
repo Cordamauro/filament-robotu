@@ -74,15 +74,18 @@ def scrape_shopify(source_name, base_url):
     products = []
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
     try:
-        url = base_url if base_url.endswith("/products.json") else f"{base_url.rstrip('/')}/products.json"
+        url = base_url if base_url.endswith("/products.json") else f"{base_url.rstrip('/')}/products.json?limit=250"
         res = requests.get(url, headers=headers, timeout=15)
         if res.status_code == 200:
             data = res.json()
             for p in data.get("products", []):
                 title = p.get("title", "")
-                if not any(m in title.upper() for m in MATERIALS):
-                    continue
+                p_type = p.get("product_type", "")
                 
+                # Yedek parça, yazıcı vs. filtreleme (Sadece filamentler)
+                if "PRINTER" in p_type.upper() or "YAZICI" in title.upper() or "YEDEK" in title.upper():
+                    continue
+
                 brand = p.get("vendor") or source_name
                 image_url = p["images"][0]["src"] if p.get("images") else ""
                 
