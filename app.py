@@ -72,12 +72,12 @@ def detect_color(name):
                 return main_color
     return "Mavi"
 
-# --- PORİMA İÇİN SHOPIFY SCRAPER (DOKUNULMADI) ---
+# --- PORİMA İÇİN DÜZELTİLMİŞ SHOPIFY SCRAPER ---
 def scrape_shopify(source_name, base_url):
     products = []
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
     try:
-        url = base_url if base_url.endswith("/products.json") else f"{base_url.rstrip('/')}/products.json?limit=250"
+        url = base_url if base_url.endswith("/products.json") else f"{base_url.rstrip('/')}/products.json"
         res = requests.get(url, headers=headers, timeout=15)
         if res.status_code == 200:
             data = res.json()
@@ -116,14 +116,13 @@ def scrape_shopify(source_name, base_url):
         print(f"Scrape Hatası ({source_name}): {e}")
     return products
 
-# --- ROBITSHOP İÇİN ÖZEL HTML SCRAPER ---
+# --- ROBITSHOP SCRAPER ---
 def scrape_robitshop():
     products = []
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
     
-    # Robitshop Filament Kategorileri
     cat_urls = [
         "https://www.robitshop.com/kategori/filament-1",
         "https://www.robitshop.com/kategori/abs-filamentler",
@@ -169,7 +168,6 @@ def scrape_robitshop():
                         if img_src and not img_src.startswith("http"):
                             img_src = urljoin("https://www.robitshop.com", img_src)
 
-                    # Marka tespiti (Başlıktaki ilk kelime örn: Filenta, Esun, Creality)
                     first_word = name.split()[0] if name.split() else "Robitshop"
                     brand = first_word if first_word.lower() in ["filenta", "esun", "creality", "kingroon", "filamix"] else "Robitshop"
 
@@ -194,7 +192,6 @@ def scrape_robitshop():
 
     return products
 
-# --- TÜM VERİLERİ GÜNCELLEME ---
 def update_all_data():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
