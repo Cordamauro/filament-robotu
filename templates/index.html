@@ -12,8 +12,8 @@
             font-family: 'Montserrat', sans-serif !important; 
         }
 
-        /* GÖZ YORMAYAN SOFT BETON GRİSİ / AÇIK GRİ ARKA PLAN */
-        body { background-color: #e8ecf0; }
+        /* DAHA KOYU VE BELİRGİN BETON GRİSİ S AYFA ARKA PLANI */
+        body { background-color: #dce2e8; }
         
         /* KOYU HARDAL ZEMİN VE GEOMETRİK BALIKSIRTI/CHEVRON DESENİ */
         .hero-banner {
@@ -135,19 +135,31 @@
         }
 
         .card { 
-            border: 1px solid #dcdfe4; 
+            border: 1px solid #cbcfd5; 
             border-radius: 12px; 
-            box-shadow: 0 4px 12px rgba(0,0,0,0.04); 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.06); 
             transition: transform 0.2s, box-shadow 0.2s; 
             overflow: hidden; 
             background-color: #ffffff;
         }
-        .card:hover { transform: translateY(-4px); box-shadow: 0 8px 20px rgba(0,0,0,0.08); }
-        .product-img-container { height: 200px; background-color: #ffffff; display: flex; align-items: center; justify-content: center; padding: 15px; border-bottom: 1px solid #f0f0f0; position: relative; }
+        .card:hover { transform: translateY(-4px); box-shadow: 0 8px 20px rgba(0,0,0,0.12); }
+        
+        /* ÜRÜN GÖRSEL KUTUSU: ESKİ AÇIK GRİ/BEYAZIMSI ARKA PLAN */
+        .product-img-container { 
+            height: 200px; 
+            background-color: #e8ecf0; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            padding: 15px; 
+            border-bottom: 1px solid #dcdfe4; 
+            position: relative; 
+        }
+        
         .product-img { max-height: 100%; max-width: 100%; object-fit: contain; }
         .price-tag { font-size: 1.3rem; font-weight: 700; color: #198754; }
         .stock-badge { position: absolute; top: 10px; right: 10px; font-size: 0.75rem; z-index: 2; font-weight: 600; }
-        .result-count-bar { font-size: 0.95rem; color: #495057; font-weight: 600; margin-bottom: 1rem; }
+        .result-count-bar { font-size: 0.95rem; color: #343a40; font-weight: 600; margin-bottom: 1rem; }
         .color-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 5px; border: 1px solid rgba(0,0,0,0.2); vertical-align: middle; }
     </style>
 </head>
