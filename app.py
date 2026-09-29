@@ -45,7 +45,7 @@ def disable_browser_cache(response):
 COLOR_WORDS = [
     "siyah", "beyaz", "kırmızı", "mavi", "yeşil", "sarı", "turuncu", "mor", "pembe", 
     "gri", "gümüş", "altın", "kahve", "bej", "mint", "turkuaz", "lila", "şeffaf", 
-    "doğal", "naturel", "natural", "bordo", "lacivert", "antrasit", "bronz", "bakır", "ten"
+    "doğal", "naturel", "natural", "bordo", "lacivert", "antrasit", "bronz", "bakır", "ten", "somun", "sakura"
 ]
 
 MATERIAL_PATTERNS = [
@@ -57,7 +57,6 @@ MATERIAL_PATTERNS = [
     ("PC", r"\bPC\b"), ("PLA", r"\bPLA\b")
 ]
 
-# KESİNLİKLE ENGELLENEN PARÇA VE AKSESUAR KELİMELERİ
 EXCLUDE_TERMS = [
     "cutter", "tube", "replacement", "ptfe", "kesici", "borusu", "bıçak", "makas",
     "nozzle", "hotend", "extruder", "kurutucu", "dryer", "dry box", "vakum", "poşet",
@@ -179,18 +178,20 @@ def scrape_shopify(source: dict, headers: dict) -> list[dict]:
                     
                     if not is_valid_filament(full_name): continue
 
-                    # Varyant Resmini Bul (ID veya Renk İsmi İle Eşleşen Resim Arama)
+                    # Gerçek Varyant Görselini Bulma
                     v_img_id = v.get("image_id")
                     v_img_src = img_map.get(v_img_id)
                     
-                    if not v_img_src:
-                        # Resimlerin alt text veya alt_name bilgisinde renk arama
+                    # Eğer image_id ile eşleşmediyse, mağazanın resim dizisinde isim/renk araması yap
+                    if not v_img_src and len(images) > 1:
                         for img in images:
-                            alt = (img.get("alt") or "").lower()
-                            if any(c in v_title.lower() for c in COLOR_WORDS) and any(c in alt for c in COLOR_WORDS if c in v_title.lower()):
+                            img_src_lower = (img.get("src") or "").lower()
+                            v_title_lower = v_title.lower()
+                            # URL içinde renk kelimesi var mı?
+                            if any(c in v_title_lower for c in COLOR_WORDS) and any(c in img_src_lower for c in COLOR_WORDS if c in v_title_lower):
                                 v_img_src = img.get("src")
                                 break
-                    
+
                     if not v_img_src:
                         v_img_src = default_img
 
