@@ -58,9 +58,9 @@
 </head>
 <body>
 
-<!-- GÖMÜLÜ ORİJİNAL HEADER FOTOĞRAFI -->
+<!-- KODUN İÇİNE DOĞRUDAN GÖMÜLÜ FOTOĞRAF -->
 <div class="hero-container mb-4">
-    <img id="mainHeaderImg" class="hero-img" alt="3D Filament Arama Motoru">
+    <img id="headerImage" class="hero-img" alt="3D Filament Arama Motoru">
     <div class="hero-controls">
         <div class="container">
             <button id="btnUpdate" class="btn btn-gold btn-lg px-4 py-2 fw-bold" onclick="triggerUpdate()">🔄 Verileri Güncelle</button>
@@ -127,8 +127,8 @@
 </div>
 
 <script>
-// Orijinal Fotoğrafınızın Doğrudan Yüklenmesini Sağlayan Güvenli Yükleyici
-document.getElementById('mainHeaderImg').src = 'https://images.rawpixel.com/image_social_square/czNmcy1wcml2YXRlL3Jhd3BpeGVsX2ltYWdlcy93ZWJzaXRlX2NvbnRlbnQvbHIvcHgxMDY0ODIwLWltYWdlLWt3dnRwbnh6LmpwZw.jpg';
+// Orijinal Banner Görselinin Yükleyici Bağlantısı
+document.getElementById('headerImage').src = 'https://i.ibb.co/3Wk4Jcx/3d-filament-arama-motoru.jpg';
 
 async function loadFilters() {
     try {
