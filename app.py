@@ -45,7 +45,7 @@ def disable_browser_cache(response):
 COLOR_WORDS = [
     "siyah", "beyaz", "kırmızı", "mavi", "yeşil", "sarı", "turuncu", "mor", "pembe", 
     "gri", "gümüş", "altın", "kahve", "bej", "mint", "turkuaz", "lila", "şeffaf", 
-    "doğal", "naturel", "natural", "bordo", "lacivert", "antrasit", "bronz", "bakır"
+    "doğal", "naturel", "natural", "bordo", "lacivert", "antrasit", "bronz", "bakır", "ten"
 ]
 
 MATERIAL_PATTERNS = [
@@ -105,15 +105,10 @@ def price_number(value) -> float | None:
 
 def is_valid_filament(name: str) -> bool:
     name_lower = name.lower()
-    
-    # 1. Kural: Aksesuar/yedek parça kelimelerinden biri geçiyorsa DİREKT ELE
     if any(term in name_lower for term in EXCLUDE_TERMS):
         return False
-    
-    # 2. Kural: Gerçek makara filament olması için adında "filament" kelimesi geçmeli
     if "filament" not in name_lower:
         return False
-        
     return True
 
 
@@ -147,7 +142,7 @@ def save_products(items: list[dict]) -> int:
                 conn.execute("""INSERT INTO products(source, external_id, name, brand, material, color, weight_g, price, old_price, in_stock, url, image, updated_at)
                   VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                   ON CONFLICT(source, url) DO UPDATE SET 
-                  price=excluded.price, in_stock=excluded.in_stock, image=excluded.image, updated_at=excluded.updated_at""", 
+                  price=excluded.price, in_stock=excluded.in_stock, color=excluded.color, image=excluded.image, updated_at=excluded.updated_at""", 
                   (p.get("source"), str(p.get("external_id", "")), name, meta["brand"], meta["material"], meta["color"], meta["weight_g"], price, p.get("old_price"), 1, p.get("url"), p.get("image"), now))
                 saved += 1
             except Exception:
@@ -184,9 +179,21 @@ def scrape_shopify(source: dict, headers: dict) -> list[dict]:
                     
                     if not is_valid_filament(full_name): continue
 
+                    # Varyant Resmini Bul (ID veya Renk İsmi İle Eşleşen Resim Arama)
                     v_img_id = v.get("image_id")
-                    v_img_src = img_map.get(v_img_id) or default_img
+                    v_img_src = img_map.get(v_img_id)
                     
+                    if not v_img_src:
+                        # Resimlerin alt text veya alt_name bilgisinde renk arama
+                        for img in images:
+                            alt = (img.get("alt") or "").lower()
+                            if any(c in v_title.lower() for c in COLOR_WORDS) and any(c in alt for c in COLOR_WORDS if c in v_title.lower()):
+                                v_img_src = img.get("src")
+                                break
+                    
+                    if not v_img_src:
+                        v_img_src = default_img
+
                     if v_img_src.startswith("//"):
                         v_img_src = "https:" + v_img_src
                     elif v_img_src and not v_img_src.startswith("http"):
