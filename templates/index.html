@@ -8,7 +8,7 @@
     <style>
         body { background-color: #f4f6f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         
-        /* BİREBİR ORİJİNAL GÖRSEL HEADER ALANI */
+        /* HER YERDE SORUNSUZ AÇILAN GÖRSEL BANNER */
         .hero-container {
             width: 100%;
             background-color: #2b2219;
@@ -19,7 +19,7 @@
 
         .hero-img {
             width: 100%;
-            max-height: 420px;
+            max-height: 400px;
             object-fit: cover;
             display: block;
         }
@@ -58,9 +58,9 @@
 </head>
 <body>
 
-<!-- KODUN İÇİNE DOĞRUDAN GÖMÜLÜ FOTOĞRAF -->
+<!-- BİREBİR ORİJİNAL HEADER GÖRSELİ (DOĞRUDAN HTML İÇERİSİNDE) -->
 <div class="hero-container mb-4">
-    <img id="headerImage" class="hero-img" alt="3D Filament Arama Motoru">
+    <img src="https://i.hizliresim.com/p510l9l.jpg" class="hero-img" alt="3D Filament Arama Motoru" onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1615655406736-b37c4fabf923?auto=format&fit=crop&w=1600&q=80';">
     <div class="hero-controls">
         <div class="container">
             <button id="btnUpdate" class="btn btn-gold btn-lg px-4 py-2 fw-bold" onclick="triggerUpdate()">🔄 Verileri Güncelle</button>
@@ -127,9 +127,6 @@
 </div>
 
 <script>
-// Orijinal Banner Görselinin Yükleyici Bağlantısı
-document.getElementById('headerImage').src = 'https://i.ibb.co/3Wk4Jcx/3d-filament-arama-motoru.jpg';
-
 async function loadFilters() {
     try {
         const res = await fetch('/api/filters');
