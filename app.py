@@ -42,43 +42,45 @@ def disable_browser_cache(response):
     return response
 
 
-# Renk Geçişi Tanımlayıcı Kalıplar
-COLOR_SHIFT_PATTERNS = re.compile(
-    r"color\s*shift|renk\s*geçiş|renk\s*gecis|transition|rainbow|co[- ]?extrusion|multi[- ]?color|dual[- ]?color|tri[- ]?color|chameleon|bukalemun", 
-    re.I
-)
-
-# Genişletilmiş Renk Sözlüğü & İngilizce/Fantezi İsim Haritası
+# DEV RENK HARİTASI (İngilizce, Türkçe, Tonlar ve Fantezi İsimler)
 COLOR_MAPPING = [
     # Renk Geçişi
-    (r"color\s*shift|renk\s*geçiş|transition|rainbow|dual[- ]?color|tri[- ]?color", "Renk Geçişi"),
-    # Siyah & Tonları
-    (r"siyah|black|dark|gece|obsidian|antrasit|anthracite", "Siyah"),
-    # Beyaz & Tonları
-    (r"beyaz|white|kar|snow|fildişi|ivory", "Beyaz"),
-    # Kırmızı & Bordo
-    (r"bordo|burgundy|maroon", "Bordo"),
-    (r"kırmızı|red|crimson|ruby|sakura|somun|somon|peach", "Kırmızı"),
-    # Mavi & Lacivert Tonları
+    (r"color\s*shift|renk\s*geçiş|transition|rainbow|dual[- ]?color|tri[- ]?color|co[- ]?ex", "Renk Geçişi"),
+    
+    # Yeşil (Haki, Olive, Fıstık vb.)
+    (r"yeşil|green|haki|khaki|olive|zeytin|mint|nane|fıstık|emerald|zümrüt|lime|çim|grass|pistachio|forest|orman", "Yeşil"),
+    
+    # Mavi & Lacivert
     (r"lacivert|navy|dark\s*blue", "Lacivert"),
-    (r"mavi|blue|buz|ice|sky|gök|turkuaz|teal|cyan|sapphire|ocean|okyanus", "Mavi"),
-    # Yeşil Tonları
-    (r"yeşil|green|mint|nane|fıstık|olive|zeytin|emerald|zümrüt|lime", "Yeşil"),
-    # Sarı & Altın
+    (r"mavi|blue|buz|ice|sky|gök|turkuaz|teal|cyan|sapphire|ocean|okyanus|azure|cobalt|kobalt", "Mavi"),
+    
+    # Kırmızı, Somon, Mercan
+    (r"bordo|burgundy|maroon", "Bordo"),
+    (r"kırmızı|red|crimson|ruby|sakura|somun|somon|salmon|mercan|coral|peach|şeftali|al", "Kırmızı"),
+    
+    # Sarı, Altın, Bakır
     (r"altın|gold|bronz|bronze|copper|bakır", "Altın"),
-    (r"sarı|yellow|limon|lemon", "Sarı"),
+    (r"sarı|yellow|limon|lemon|mustard|hardal", "Sarı"),
+    
     # Turuncu
-    (r"turuncu|orange|amber", "Turuncu"),
-    # Mor & Pembe & Lila
-    (r"pembe|pink|magenta", "Pembe"),
-    (r"mor|purple|violet|lila|lilac|lavanta|lavender", "Mor"),
+    (r"turuncu|orange|amber|kehrİbar", "Turuncu"),
+    
+    # Pembe & Mor & Lila
+    (r"pembe|pink|magenta|fuchsia|fuşya", "Pembe"),
+    (r"mor|purple|violet|lila|lilac|lavanta|lavender|erik|plum", "Mor"),
+    
+    # Siyah & Füme
+    (r"siyah|black|dark|gece|obsidian|antrasit|anthracite|gece\s*buzu", "Siyah"),
+    
+    # Beyaz & Krem
+    (r"beyaz|white|kar|snow|fildişi|ivory|krem|cream|kemik", "Beyaz"),
+    
     # Gri & Gümüş
     (r"gümüş|silver", "Gümüş"),
-    (r"gri|grey|gray|metal|titanium|titanyum", "Gri"),
-    # Kahverengi & Bej & Ten
-    (r"ten|skin|flesh", "Ten"),
-    (r"bej|beige|naturel|natural|doğal|şeffaf|transparent|clear", "Doğal/Bej"),
-    (r"kahve|brown|chocolate|çikolata|ahşap|wood", "Kahverengi")
+    (r"gri|grey|gray|metal|titanium|titanyum|çelik|steel|fÜme", "Gri"),
+    
+    # Ten & Bej & Doğal
+    (r"ten|skin|flesh|bej|beige|naturel|natural|doğal|şeffaf|transparent|clear|wood|ahşap|hazel|fındık|kahve|brown|chocolate|çikolata", "Ten / Doğal")
 ]
 
 COLOR_ALIASES = {
@@ -87,7 +89,7 @@ COLOR_ALIASES = {
     "beyaz": ["beyaz", "white"],
     "siyah": ["siyah", "black"],
     "mavi": ["mavi", "blue"],
-    "yeşil": ["yesil", "green"],
+    "yeşil": ["yesil", "green", "haki"],
     "gümüş": ["gumus", "silver"],
     "altın": ["altin", "gold"],
     "somon": ["somon", "salmon"],
@@ -103,7 +105,6 @@ MATERIAL_PATTERNS = [
     ("PC", r"\bPC\b"), ("PLA", r"\bPLA\b")
 ]
 
-# KESİNLİKLE ENGELLENEN PARÇA VE AKSESUAR KELİMELERİ (HUB, SPLITTER EKLENDİ)
 EXCLUDE_TERMS = [
     "hub", "splitter", "buffer", "feeder", "cutter", "tube", "replacement", "ptfe", "kesici", "borusu", "bıçak", "makas",
     "nozzle", "hotend", "extruder", "kurutucu", "dryer", "dry box", "vakum", "poşet",
@@ -159,7 +160,6 @@ def is_valid_filament(name: str) -> bool:
 
 
 def detect_color(name: str) -> str:
-    """İngilizce veya fantezi renk isimlerini Türkçe kök renklere dönüştürür."""
     for pattern, normalized_color in COLOR_MAPPING:
         if re.search(pattern, name, re.I):
             return normalized_color
