@@ -57,7 +57,6 @@ MATERIAL_PATTERNS = [
     ("PC", r"\bPC\b"), ("PLA", r"\bPLA\b")
 ]
 
-# KESİN ENGELLENEN FİLAMENT DIŞI ÜRÜNLER
 EXCLUDE_TERMS = [
     "nozzle", "hotend", "extruder", "kurutucu", "dryer", "dry box", "vakum", "poşet",
     "reçine", "resin", "3d kalem", "spatula", "sprey", "rulman", "soğutucu", "fan",
@@ -104,10 +103,8 @@ def price_number(value) -> float | None:
 
 def is_valid_filament(name: str) -> bool:
     name_lower = name.lower()
-    # Filtre 1: Kesinlikle aksesuar/reçine ise ele
     if any(term in name_lower for term in EXCLUDE_TERMS):
         return False
-    # Filtre 2: İçinde filament veya materyal ismi geçmek zorunda
     has_material = any(re.search(pat[1], name, re.I) for pat in MATERIAL_PATTERNS)
     if "filament" in name_lower or has_material:
         return True
@@ -131,6 +128,10 @@ def save_products(items: list[dict]) -> int:
             if not name or not is_valid_filament(name):
                 continue
                 
+            # Sadece stokta olanları kaydet
+            if not p.get("in_stock") or p.get("in_stock") != 1:
+                continue
+
             price = p.get("price")
             if not price or price <= 0:
                 continue
@@ -142,7 +143,7 @@ def save_products(items: list[dict]) -> int:
                   VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                   ON CONFLICT(source, url) DO UPDATE SET 
                   price=excluded.price, in_stock=excluded.in_stock, image=excluded.image, updated_at=excluded.updated_at""", 
-                  (p.get("source"), str(p.get("external_id", "")), name, meta["brand"], meta["material"], meta["color"], meta["weight_g"], price, p.get("old_price"), p.get("in_stock", 1), p.get("url"), p.get("image"), now))
+                  (p.get("source"), str(p.get("external_id", "")), name, meta["brand"], meta["material"], meta["color"], meta["weight_g"], price, p.get("old_price"), 1, p.get("url"), p.get("image"), now))
                 saved += 1
             except Exception:
                 pass
@@ -166,17 +167,19 @@ def scrape_shopify(source: dict, headers: dict) -> list[dict]:
                 if not is_valid_filament(title): continue
 
                 images = p.get("images") or []
-                # Görsel ID Haritası Olustur
                 img_map = {img.get("id"): img.get("src") for img in images if img.get("id") and img.get("src")}
                 default_img = images[0].get("src") if images else ""
 
                 for v in p.get("variants", []):
+                    # Stokta yoksa atla
+                    if not v.get("available"):
+                        continue
+
                     v_title = v.get('title', '')
                     full_name = f"{title} {v_title if v_title != 'Default Title' else ''}"
                     
                     if not is_valid_filament(full_name): continue
 
-                    # Varyanta Özel Görsel Bulma
                     v_img_id = v.get("image_id")
                     v_img_src = img_map.get(v_img_id) or default_img
                     
@@ -193,7 +196,7 @@ def scrape_shopify(source: dict, headers: dict) -> list[dict]:
                             "name": full_name,
                             "price": price,
                             "old_price": price_number(v.get("compare_at_price")),
-                            "in_stock": 1 if v.get("available") else 0,
+                            "in_stock": 1,
                             "url": f"{base_url}/products/{p.get('handle')}?variant={v.get('id')}",
                             "image": v_img_src
                         })
@@ -232,11 +235,11 @@ def update_all() -> None:
                         items = future.result()
                         count = save_products(items)
                         total_saved += count
-                        print(f"[{s['name']}] -> {count} adet eklendi.", flush=True)
+                        print(f"[{s['name']}] -> {count} adet stoklu ürün eklendi.", flush=True)
                     except Exception as e:
                         print(f"[{s['name']}] Hata: {e}", flush=True)
 
-            print(f">>> TOPLAM {total_saved} ADET FİLAMENT EKLENDİ <<<", flush=True)
+            print(f">>> TOPLAM {total_saved} ADET STOKTA OLAN FİLAMENT EKLENDİ <<<", flush=True)
 
         update_state.update(message="Güncellendi", updated_at=datetime.now().strftime("%d.%m.%Y %H:%M"))
     finally:
@@ -252,7 +255,7 @@ def index():
 @app.get("/api/products")
 def products():
     q = request.args.get("q", "").strip()
-    filters, params = [], []
+    filters, params = ["in_stock = 1"], []
     for field in ("brand", "material", "color", "source"):
         value = request.args.get(field, "").strip()
         if value: filters.append(f"{field} = ?"); params.append(value)
@@ -260,9 +263,7 @@ def products():
         filters.append("(name LIKE ? OR brand LIKE ? OR material LIKE ? OR color LIKE ?)")
         params += [f"%{q}%"] * 4
     
-    sql = "SELECT *, CASE WHEN weight_g > 0 THEN price * 1000.0 / weight_g END AS kg_price FROM products"
-    if filters: sql += " WHERE " + " AND ".join(filters)
-    sql += " ORDER BY price ASC LIMIT 1000"
+    sql = "SELECT *, CASE WHEN weight_g > 0 THEN price * 1000.0 / weight_g END AS kg_price FROM products WHERE " + " AND ".join(filters) + " ORDER BY price ASC LIMIT 1000"
     
     with db() as conn: rows = [dict(r) for r in conn.execute(sql, params)]
     return jsonify(rows)
@@ -273,7 +274,7 @@ def filters():
     with db() as conn:
         values = {}
         for field in ("brand", "material", "color", "source"):
-            sql = f"SELECT DISTINCT {field} FROM products WHERE {field} IS NOT NULL AND {field} != '' ORDER BY {field}"
+            sql = f"SELECT DISTINCT {field} FROM products WHERE {field} IS NOT NULL AND {field} != '' AND in_stock = 1 ORDER BY {field}"
             values[field] = [row[0] for row in conn.execute(sql)]
     return jsonify(values)
 
