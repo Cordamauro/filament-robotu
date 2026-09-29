@@ -47,8 +47,11 @@ COLOR_MAPPING = [
     # Renk Geçişi
     (r"color\s*shift|renk\s*geçiş|transition|rainbow|dual[- ]?color|tri[- ]?color|co[- ]?ex", "Renk Geçişi"),
     
-    # Yeşil (Haki, Olive, Fıstık vb.)
-    (r"yeşil|green|haki|khaki|olive|zeytin|mint|nane|fıstık|emerald|zümrüt|lime|çim|grass|pistachio|forest|orman", "Yeşil"),
+    # Army Yeşil
+    (r"army", "Army Yeşil"),
+
+    # Yeşil (Matcha, Haki, Olive, Fıstık vb.)
+    (r"yeşil|green|matcha|haki|khaki|olive|zeytin|mint|nane|fıstık|emerald|zümrüt|lime|çim|grass|pistachio|forest|orman", "Yeşil"),
     
     # Mavi & Lacivert
     (r"lacivert|navy|dark\s*blue", "Lacivert"),
@@ -75,12 +78,18 @@ COLOR_MAPPING = [
     # Beyaz & Krem
     (r"beyaz|white|kar|snow|fildişi|ivory|krem|cream|kemik", "Beyaz"),
     
-    # Gri & Gümüş
+    # Gri (Stone, Kil, Granit vb.)
     (r"gümüş|silver", "Gümüş"),
-    (r"gri|grey|gray|metal|titanium|titanyum|çelik|steel|fÜme", "Gri"),
+    (r"gri|grey|gray|stone|kil|granit|rock|metal|titanium|titanyum|çelik|steel|fÜme", "Gri"),
     
-    # Ten & Bej & Doğal
-    (r"ten|skin|flesh|bej|beige|naturel|natural|doğal|şeffaf|transparent|clear|wood|ahşap|hazel|fındık|kahve|brown|chocolate|çikolata", "Ten / Doğal")
+    # Kahverengi (Mocha, Tuğla vb.)
+    (r"mocha|tuğla|kahve|brown|chocolate|çikolata|ahşap|wood|hazel|fındık", "Kahverengi"),
+
+    # Ten (Latte, Skin vb.)
+    (r"latte|ten|skin|flesh", "Ten"),
+
+    # Bej & Doğal / Şeffaf
+    (r"bej|beige|naturel|natural|doğal|şeffaf|transparent|clear", "Doğal/Bej")
 ]
 
 COLOR_ALIASES = {
@@ -89,7 +98,7 @@ COLOR_ALIASES = {
     "beyaz": ["beyaz", "white"],
     "siyah": ["siyah", "black"],
     "mavi": ["mavi", "blue"],
-    "yeşil": ["yesil", "green", "haki"],
+    "yeşil": ["yesil", "green", "haki", "matcha"],
     "gümüş": ["gumus", "silver"],
     "altın": ["altin", "gold"],
     "somon": ["somon", "salmon"],
@@ -163,7 +172,7 @@ def detect_color(name: str) -> str:
     for pattern, normalized_color in COLOR_MAPPING:
         if re.search(pattern, name, re.I):
             return normalized_color
-    return "Belirtilmemiş"
+    return "Doğal / Özel Renk"
 
 
 def infer(name: str, source: str) -> dict:
