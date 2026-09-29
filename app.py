@@ -72,23 +72,26 @@ def detect_color(name):
                 return main_color
     return "Mavi"
 
-# --- PORİMA (LIMIT=250 İLE TEK İSTEKTE 237 ULAŞAN SHOPIFY SCRAPER) ---
+# --- PORİMA İÇİN OTO-GÖRSEL EŞLEŞTİRMELİ SHOPIFY SCRAPER ---
 def scrape_shopify(source_name, base_url):
     products = []
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
     try:
-        clean_url = base_url.split('?')[0].rstrip('/')
-        url = clean_url if clean_url.endswith("/products.json") else f"{clean_url}/products.json"
-        
-        # 250 LIMIT PARANETRESİ PORİMA'NIN BÜTÜN URUNLERINI TEK SEFERDE CEKER
-        res = requests.get(f"{url}?limit=250", headers=headers, timeout=15)
+        url = base_url if base_url.endswith("/products.json") else f"{base_url.rstrip('/')}/products.json"
+        res = requests.get(url, headers=headers, timeout=15)
         if res.status_code == 200:
             data = res.json()
             for p in data.get("products", []):
                 title = p.get("title", "")
                 brand = p.get("vendor") or source_name
-                image_url = p["images"][0]["src"] if p.get("images") else ""
                 
+                # Görsel Haritası (featured_image yoksa varyant resmini veya ana resmi eşleştir)
+                images = p.get("images", [])
+                main_image = images[0]["src"] if images else ""
+                
+                # Varyant görsel id haritası
+                img_dict = {img.get("id"): img.get("src") for img in images if img.get("id")}
+
                 for v in p.get("variants", []):
                     if not v.get("available", False):
                         continue
@@ -99,8 +102,13 @@ def scrape_shopify(source_name, base_url):
                     
                     v_title = v.get("title", "")
                     full_name = f"{title} - {v_title}" if v_title and v_title != "Default Title" else title
+                    
+                    # Varyanta özel resim varsa onu al, yoksa ana resmi al
+                    v_img_id = v.get("image_id")
+                    image_url = img_dict.get(v_img_id, main_image)
+                    
                     prod_id = f"{source_name}_{v.get('id')}"
-                    prod_url = f"{clean_url.replace('/products.json', '')}/products/{p.get('handle')}"
+                    prod_url = f"{base_url.replace('/products.json', '')}/products/{p.get('handle')}"
                     
                     products.append({
                         "id": prod_id,
