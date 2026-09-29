@@ -72,13 +72,16 @@ def detect_color(name):
                 return main_color
     return "Mavi"
 
-# --- PORİMA İÇİN İLK DÜZGÜN ÇALIŞAN KODUMUZ (237 ADET BULAN) ---
+# --- PORİMA (LIMIT=250 İLE TEK İSTEKTE 237 ULAŞAN SHOPIFY SCRAPER) ---
 def scrape_shopify(source_name, base_url):
     products = []
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
     try:
-        url = base_url if base_url.endswith("/products.json") else f"{base_url.rstrip('/')}/products.json"
-        res = requests.get(url, headers=headers, timeout=15)
+        clean_url = base_url.split('?')[0].rstrip('/')
+        url = clean_url if clean_url.endswith("/products.json") else f"{clean_url}/products.json"
+        
+        # 250 LIMIT PARANETRESİ PORİMA'NIN BÜTÜN URUNLERINI TEK SEFERDE CEKER
+        res = requests.get(f"{url}?limit=250", headers=headers, timeout=15)
         if res.status_code == 200:
             data = res.json()
             for p in data.get("products", []):
@@ -97,7 +100,7 @@ def scrape_shopify(source_name, base_url):
                     v_title = v.get("title", "")
                     full_name = f"{title} - {v_title}" if v_title and v_title != "Default Title" else title
                     prod_id = f"{source_name}_{v.get('id')}"
-                    prod_url = f"{base_url.replace('/products.json', '')}/products/{p.get('handle')}"
+                    prod_url = f"{clean_url.replace('/products.json', '')}/products/{p.get('handle')}"
                     
                     products.append({
                         "id": prod_id,
@@ -116,7 +119,7 @@ def scrape_shopify(source_name, base_url):
         print(f"Scrape Hatası ({source_name}): {e}")
     return products
 
-# --- ROBITSHOP İÇİN AYRI HTML SCRAPER ---
+# --- ROBITSHOP SCRAPER ---
 def scrape_robitshop():
     products = []
     headers = {
