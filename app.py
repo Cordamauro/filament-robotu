@@ -72,27 +72,16 @@ def detect_color(name):
                 return main_color
     return "Mavi"
 
-# --- PORİMA İÇİN SAYFALAMALI SHOPIFY SCRAPER ---
+# --- PORİMA İÇİN İLK DÜZGÜN ÇALIŞAN KODUMUZ (237 ADET BULAN) ---
 def scrape_shopify(source_name, base_url):
     products = []
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-    
-    clean_base = base_url.replace('/products.json', '').rstrip('/')
-    
-    page = 1
-    while True:
-        try:
-            url = f"{clean_base}/products.json?page={page}&limit=250"
-            res = requests.get(url, headers=headers, timeout=15)
-            if res.status_code != 200:
-                break
-                
+    try:
+        url = base_url if base_url.endswith("/products.json") else f"{base_url.rstrip('/')}/products.json"
+        res = requests.get(url, headers=headers, timeout=15)
+        if res.status_code == 200:
             data = res.json()
-            raw_products = data.get("products", [])
-            if not raw_products:
-                break  # Sayfada ürün kalmayınca döngüden çık
-                
-            for p in raw_products:
+            for p in data.get("products", []):
                 title = p.get("title", "")
                 brand = p.get("vendor") or source_name
                 image_url = p["images"][0]["src"] if p.get("images") else ""
@@ -108,7 +97,7 @@ def scrape_shopify(source_name, base_url):
                     v_title = v.get("title", "")
                     full_name = f"{title} - {v_title}" if v_title and v_title != "Default Title" else title
                     prod_id = f"{source_name}_{v.get('id')}"
-                    prod_url = f"{clean_base}/products/{p.get('handle')}"
+                    prod_url = f"{base_url.replace('/products.json', '')}/products/{p.get('handle')}"
                     
                     products.append({
                         "id": prod_id,
@@ -123,14 +112,11 @@ def scrape_shopify(source_name, base_url):
                         "url": prod_url,
                         "image": image_url
                     })
-            page += 1
-        except Exception as e:
-            print(f"Scrape Hatası ({source_name}): {e}")
-            break
-            
+    except Exception as e:
+        print(f"Scrape Hatası ({source_name}): {e}")
     return products
 
-# --- ROBITSHOP SCRAPER ---
+# --- ROBITSHOP İÇİN AYRI HTML SCRAPER ---
 def scrape_robitshop():
     products = []
     headers = {
@@ -234,7 +220,7 @@ def update_all_data():
         if "porima" in name.lower() or "shopify" in src.get("kind", "").lower() or "json" in url:
             prods = scrape_shopify(name, url)
             all_products.extend(prods)
-            print(f"[{name}] -> {len(prods)} adet filament eklendi.")
+            print(f"[{name}] -> {len(prods)} adet tam filament eklendi.")
         elif "robitshop" in name.lower():
             prods = scrape_robitshop()
             all_products.extend(prods)
