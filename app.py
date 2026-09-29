@@ -80,12 +80,6 @@ def scrape_shopify(source_name, base_url):
             data = res.json()
             for p in data.get("products", []):
                 title = p.get("title", "")
-                p_type = p.get("product_type", "")
-                
-                # Yedek parça, yazıcı vs. filtreleme (Sadece filamentler)
-                if "PRINTER" in p_type.upper() or "YAZICI" in title.upper() or "YEDEK" in title.upper():
-                    continue
-
                 brand = p.get("vendor") or source_name
                 image_url = p["images"][0]["src"] if p.get("images") else ""
                 
