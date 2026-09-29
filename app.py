@@ -45,8 +45,23 @@ def disable_browser_cache(response):
 COLOR_WORDS = [
     "siyah", "beyaz", "kırmızı", "mavi", "yeşil", "sarı", "turuncu", "mor", "pembe", 
     "gri", "gümüş", "altın", "kahve", "bej", "mint", "turkuaz", "lila", "şeffaf", 
-    "doğal", "naturel", "natural", "bordo", "lacivert", "antrasit", "bronz", "bakır", "ten", "somun", "sakura"
+    "doğal", "naturel", "natural", "bordo", "lacivert", "antrasit", "bronz", "bakır", 
+    "ten", "somun", "somon", "sakura", "gold", "silver", "yellow", "white", "black", "red", "blue", "green"
 ]
+
+# Türkçe Karakter Dönüştürücü (Resim URL'lerinde Türkçe karakter eşleştirme için)
+COLOR_ALIASES = {
+    "sarı": ["sari", "yellow"],
+    "kırmızı": ["kirmizi", "red"],
+    "beyaz": ["beyaz", "white"],
+    "siyah": ["siyah", "black"],
+    "mavi": ["mavi", "blue"],
+    "yeşil": ["yesil", "green"],
+    "gümüş": ["gumus", "silver"],
+    "altın": ["altin", "gold"],
+    "somon": ["somon", "salmon"],
+    "şeffaf": ["seffaf", "transparent", "clear"]
+}
 
 MATERIAL_PATTERNS = [
     ("PLA+", r"\bPLA\s*(?:\+|PLUS|PRO)\b"), ("PETG-CF", r"\bPETG[- ]?CF\b"),
@@ -178,20 +193,35 @@ def scrape_shopify(source: dict, headers: dict) -> list[dict]:
                     
                     if not is_valid_filament(full_name): continue
 
-                    # Gerçek Varyant Görselini Bulma
-                    v_img_id = v.get("image_id")
-                    v_img_src = img_map.get(v_img_id)
+                    # Akıllı Görsel Bulucu (3 Kademeli)
+                    v_img_src = None
                     
-                    # Eğer image_id ile eşleşmediyse, mağazanın resim dizisinde isim/renk araması yap
-                    if not v_img_src and len(images) > 1:
-                        for img in images:
-                            img_src_lower = (img.get("src") or "").lower()
-                            v_title_lower = v_title.lower()
-                            # URL içinde renk kelimesi var mı?
-                            if any(c in v_title_lower for c in COLOR_WORDS) and any(c in img_src_lower for c in COLOR_WORDS if c in v_title_lower):
-                                v_img_src = img.get("src")
-                                break
+                    # 1. Kademeli arama: Direct Variant Image
+                    v_img_id = v.get("image_id")
+                    if v_img_id:
+                        v_img_src = img_map.get(v_img_id)
 
+                    # Featured Image kontrolü
+                    if not v_img_src and v.get("featured_image"):
+                        v_img_src = v.get("featured_image", {}).get("src")
+
+                    # 2. Kademeli arama: Resim URL'lerinde ve Alt metinlerde Renk Adı Arama
+                    if not v_img_src and len(images) > 1:
+                        v_title_lower = v_title.lower()
+                        for img in images:
+                            src_lower = (img.get("src") or "").lower()
+                            alt_lower = (img.get("alt") or "").lower()
+                            
+                            # Varyanttaki tüm renk kelimelerini tara
+                            for color_key, aliases in COLOR_ALIASES.items():
+                                if color_key in v_title_lower:
+                                    for alias in aliases:
+                                        if alias in src_lower or alias in alt_lower:
+                                            v_img_src = img.get("src")
+                                            break
+                                if v_img_src: break
+
+                    # Hiçbiri eşleşmediyse varsayılana düş
                     if not v_img_src:
                         v_img_src = default_img
 
