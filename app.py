@@ -42,37 +42,34 @@ def disable_browser_cache(response):
     return response
 
 
-# ÖZEL RENK MAPPING KURAL MOTORU (Sıralama Önceliklidir!)
+# ÖZEL RENK MAPPING KURAL MOTORU (Sıralama ve Kelime Sınırları Düzeltildi)
 COLOR_MAPPING = [
-    # 1. KESİN KURAL: İsminde geçen kelime başka hiçbir sınıfa girmesin!
-    (r"beyaz|ral\s*9003", "Beyaz"),
-    (r"kahverengi|kahve|tuğla|mocha", "Kahverengi"),
-    (r"mor", "Mor"),
-    (r"gümüş", "Gümüş"),
+    # 1. KESİN VE ÖNCELİKLİ KURALLAR (Başka renkle karışmayacaklar)
+    (r"\b(beyaz|white|ral\s*9003)\b", "Beyaz"),
+    (r"\b(kahverengi|kahve|tuğla|mocha|brown|chocolate)\b", "Kahverengi"),
+    (r"\b(mor|purple|violet)\b", "Mor"),
+    (r"\b(gümüş|silver)\b", "Gümüş"),
+    (r"\barmy\b", "Army"),
+    (r"\b(bakır|copper)\b", "Bakır"),
+    (r"\b(natural|naturel|şeffaf|transparent|clear)\b", "Şeffaf"),
+    (r"\bwood\b", "Wood"),
+    (r"\b(ten|somon|salmon|skin|flesh|latte)\b", "Ten"),
 
-    # 2. ÖZEL İSTEDİĞİN SINIFLANDIRMALAR
-    (r"army", "Army"),
-    (r"bakır", "Bakır"),
-    (r"natural|naturel|şeffaf|transparent|clear", "Şeffaf"),
-    (r"wood", "Wood"),
-    (r"ten|somon|salmon|skin|flesh|latte", "Ten"),
-
-    # 3. DİĞER RENK SINIFLARI
+    # 2. STANDART RENKLER (RAL KODLARINDAN ETKİLENMEYECEK ŞEKİLDE BOUNDARY EKLENDİ)
     (r"color\s*shift|renk\s*geçiş|transition|rainbow|dual[- ]?color|tri[- ]?color|co[- ]?ex", "Renk Geçişi"),
-    (r"yeşil|green|matcha|haki|khaki|olive|zeytin|mint|nane|fıstık|emerald|zümrüt|lime|çim|grass|pistachio|forest|orman", "Yeşil"),
-    (r"lacivert|navy|dark\s*blue", "Lacivert"),
-    (r"mavi|blue|buz|ice|sky|gök|turkuaz|teal|cyan|sapphire|ocean|okyanus|azure|cobalt|kobalt", "Mavi"),
-    (r"bordo|burgundy|maroon", "Bordo"),
-    (r"kırmızı|red|crimson|ruby|sakura|somun|mercan|coral|peach|şeftali|al", "Kırmızı"),
-    (r"altın|gold|bronz|bronze|copper", "Altın"),
-    (r"sarı|yellow|limon|lemon|mustard|hardal", "Sarı"),
-    (r"turuncu|orange|amber|kehrİbar", "Turuncu"),
-    (r"pembe|pink|magenta|fuchsia|fuşya", "Pembe"),
-    (r"lila|lilac|violet|lavanta|lavender|erik|plum", "Mor"),
-    (r"siyah|black|dark|gece|obsidian|antrasit|anthracite|gece\s*buzu", "Siyah"),
-    (r"silver", "Gümüş"),
-    (r"gri|grey|gray|stone|kil|granit|rock|metal|titanium|titanyum|çelik|steel|fÜme", "Gri"),
-    (r"bej|beige", "Bej")
+    (r"\b(sarı|yellow|limon|lemon|mustard|hardal)\b", "Sarı"),
+    (r"\b(turuncu|orange|amber|kehribar)\b", "Turuncu"),
+    (r"\b(siyah|black|dark|gece|obsidian|antrasit|anthracite)\b", "Siyah"),
+    (r"\b(gri|grey|gray|stone|kil|granit|rock|metal|titanium|titanyum|çelik|steel|füme)\b", "Gri"),
+    (r"\b(lacivert|navy)\b", "Lacivert"),
+    (r"\b(mavi|blue|buz|ice|sky|gök|turkuaz|teal|cyan|sapphire|ocean|okyanus|azure|cobalt|kobalt)\b", "Mavi"),
+    (r"\b(yeşil|green|matcha|haki|khaki|olive|zeytin|mint|nane|fıstık|emerald|zümrüt|lime|çim|grass|pistachio|forest|orman)\b", "Yeşil"),
+    (r"\b(pembe|pink|magenta|fuchsia|fuşya)\b", "Pembe"),
+    (r"\b(bordo|burgundy|maroon)\b", "Bordo"),
+    (r"\b(kırmızı|red|crimson|ruby|sakura|somun|mercan|coral|peach|şeftali|\bal\b)\b", "Kırmızı"),
+    (r"\b(altın|gold|bronz|bronze)\b", "Altın"),
+    (r"\b(lila|lilac|lavanta|lavender|erik|plum)\b", "Mor"),
+    (r"\b(bej|beige)\b", "Bej")
 ]
 
 COLOR_ALIASES = {
