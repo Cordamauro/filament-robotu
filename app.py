@@ -42,7 +42,6 @@ def disable_browser_cache(response):
     return response
 
 
-# GÜÇLENDİRİLMİŞ RENK HARİTASI
 COLOR_MAPPING = [
     # 1. ÖZEL İSTİSNALAR
     (r"(?=.*stone)(?=.*mercan)", "Kırmızı"),
@@ -151,18 +150,26 @@ def is_valid_filament(name: str) -> bool:
     return True
 
 
-def detect_color(name: str) -> str:
-    name_lower = name.lower()
+def detect_color(text: str) -> str:
+    """Metin veya Görsel URL'sinden Renk Tespiti Yapar."""
+    text_lower = text.lower()
     for pattern, normalized_color in COLOR_MAPPING:
-        if re.search(pattern, name_lower, re.I):
+        if re.search(pattern, text_lower, re.I):
             return normalized_color
     return "Diğer / Özel Renk"
 
 
-def infer(name: str, source: str) -> dict:
+def infer(name: str, source: str, image_url: str = "") -> dict:
     upper = name.upper()
     material = next((label for label, pattern in MATERIAL_PATTERNS if re.search(pattern, upper, re.I)), "PLA")
+    
+    # 1. Önce İsmi Tara
     color = detect_color(name)
+    
+    # 2. İsimde Renk Bulunamazsa ("Diğer / Özel Renk" düşerse) Görsel URL'sindeki İsmi Tara (Simli/Star Tespiti)
+    if color == "Diğer / Özel Renk" and image_url:
+        color = detect_color(image_url)
+
     brand = next((b for b in KNOWN_BRANDS if b.casefold() in name.casefold()), source)
     return {"brand": brand, "material": material, "color": color, "weight_g": 1000}
 
@@ -183,14 +190,15 @@ def save_products(items: list[dict]) -> int:
             if not price or price <= 0:
                 continue
 
-            meta = infer(name, p.get("source", ""))
+            image_url = p.get("image", "")
+            meta = infer(name, p.get("source", ""), image_url)
             
             try:
                 conn.execute("""INSERT INTO products(source, external_id, name, brand, material, color, weight_g, price, old_price, in_stock, url, image, updated_at)
                   VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                   ON CONFLICT(source, url) DO UPDATE SET 
                   price=excluded.price, in_stock=excluded.in_stock, color=excluded.color, image=excluded.image, updated_at=excluded.updated_at""", 
-                  (p.get("source"), str(p.get("external_id", "")), name, meta["brand"], meta["material"], meta["color"], meta["weight_g"], price, p.get("old_price"), 1, p.get("url"), p.get("image"), now))
+                  (p.get("source"), str(p.get("external_id", "")), name, meta["brand"], meta["material"], meta["color"], meta["weight_g"], price, p.get("old_price"), 1, p.get("url"), image_url, now))
                 saved += 1
             except Exception:
                 pass
@@ -222,11 +230,7 @@ def scrape_shopify(source: dict, headers: dict) -> list[dict]:
                         continue
 
                     v_title = v.get('title', '')
-                    # Varyant başlığında renk ismi varsa full_name içine ' - [Varyant]' olarak ekliyoruz
-                    if v_title and v_title != 'Default Title':
-                        full_name = f"{title} {v_title}"
-                    else:
-                        full_name = title
+                    full_name = f"{title} {v_title if v_title != 'Default Title' else ''}"
                     
                     if not is_valid_filament(full_name): continue
 
