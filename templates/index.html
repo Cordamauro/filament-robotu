@@ -18,7 +18,7 @@
             background: radial-gradient(circle at center, #3d2b1f 0%, #1a120b 100%);
             border-bottom: 5px solid #b8860b;
             box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-            padding: 3.5rem 1rem 2rem 1rem;
+            padding: 3rem 1rem 1.8rem 1rem;
             position: relative;
             text-align: center;
         }
@@ -49,16 +49,14 @@
             font-weight: 500;
             letter-spacing: 0.5px;
             text-shadow: 1px 1px 4px #000;
-            margin-bottom: 1.8rem;
+            margin-bottom: 1.5rem;
         }
 
-        /* DİNAMİK RENK TOPLARI KAPSAYICISI */
         .spool-bar {
             display: flex;
             justify-content: center;
             align-items: center;
             gap: 12px;
-            margin-bottom: 2rem;
             flex-wrap: wrap;
             max-width: 900px;
             margin-left: auto;
@@ -73,7 +71,6 @@
             box-shadow: 0 4px 8px rgba(0,0,0,0.5), inset 0 0 6px rgba(0,0,0,0.4);
             transition: all 0.2s ease;
             cursor: pointer;
-            position: relative;
         }
 
         .spool-dot:hover { 
@@ -87,19 +84,40 @@
             box-shadow: 0 0 15px rgba(245, 215, 127, 0.9);
         }
 
-        .btn-gold {
+        /* İÇE GÖMÜLÜ SADE VERİLERİ GÜNCELLE İKON BUTONU */
+        .btn-update-icon {
             background: linear-gradient(135deg, #d4af37 0%, #aa7c11 100%);
             color: #ffffff;
             border: 1px solid #e6ca65;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.6);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            transition: all 0.3s ease;
+            border-radius: 8px;
+            padding: 0 18px;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
         }
-        .btn-gold:hover {
+
+        .btn-update-icon:hover {
             background: linear-gradient(135deg, #e6ca65 0%, #c59b27 100%);
             color: #1a1003;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(184, 134, 11, 0.5);
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(184, 134, 11, 0.4);
+        }
+
+        .spin-icon {
+            display: inline-block;
+            transition: transform 0.5s ease;
+        }
+
+        .spinning {
+            animation: spin 1s infinite linear;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
 
         .card { border: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); transition: transform 0.2s, box-shadow 0.2s; overflow: hidden; }
@@ -119,11 +137,8 @@
         <h1 class="hero-title">3D Filament Arama Motoru</h1>
         <p class="hero-subtitle">En Uygun Fiyatlı Filamentleri Anında Karşılaştırın</p>
         
-        <!-- TIKLANABİLİR DİNAMİK RENK TOPLARI -->
+        <!-- DİNAMİK RENK TOPLARI -->
         <div id="spoolBar" class="spool-bar"></div>
-
-        <button id="btnUpdate" class="btn btn-gold btn-lg px-4 py-2 fw-bold" onclick="triggerUpdate()">🔄 Verileri Güncelle</button>
-        <div id="updateStatus" class="small mt-2 text-warning opacity-75"></div>
     </div>
 </div>
 
@@ -138,7 +153,7 @@
             </div>
             
             <div class="col-md-3">
-                <label class="form-label fw-bold">🏷️️ Marka</label>
+                <label class="form-label fw-bold">🏷️ Marka</label>
                 <select id="filterBrand" class="form-select" onchange="loadProducts()">
                     <option value="">Tüm Markalar</option>
                 </select>
@@ -158,8 +173,14 @@
                 </select>
             </div>
 
+            <!-- ARAMA KUTUSU VE SAĞINA EKLENEN İKON BUTON -->
             <div class="col-md-9 mt-3">
-                <input type="text" id="searchQuery" class="form-control form-control-lg" placeholder="Filament adı veya renk ara..." onkeyup="loadProducts()">
+                <div class="input-group">
+                    <input type="text" id="searchQuery" class="form-control form-control-lg" placeholder="Filament adı veya renk ara..." onkeyup="loadProducts()">
+                    <button id="btnUpdate" class="btn btn-update-icon" title="Verileri Güncelle" onclick="triggerUpdate()">
+                        <span id="updateIcon" class="spin-icon">🔄</span>
+                    </button>
+                </div>
             </div>
             
             <div class="col-md-3 mt-3 d-flex align-items-end">
@@ -230,7 +251,6 @@ async function loadFilters() {
     }
 }
 
-// HEADER RENK TOPLARINI OLUŞTURMA VE TIKLAMA BİLGİSİ
 function renderHeaderSpoolDots(colors) {
     const spoolBar = document.getElementById('spoolBar');
     if (!colors || colors.length === 0) return;
@@ -245,11 +265,9 @@ function renderHeaderSpoolDots(colors) {
     `).join('');
 }
 
-// TOPA TIKLANDIĞINDA ÇALIŞAN FONKSİYON
 function selectColorFromHeader(colorName) {
     const colorSelect = document.getElementById('filterColor');
     
-    // Eğer tıklanan renk zaten seçiliyse temizle
     if (colorSelect.value === colorName) {
         colorSelect.value = '';
     } else {
@@ -312,7 +330,6 @@ async function loadProducts() {
     list.innerHTML = products.map(p => {
         const fallbackImg = "https://via.placeholder.com/300x300?text=3D+Filament";
         const imgSrc = p.image && p.image.trim() !== "" ? p.image : fallbackImg;
-        const colorHex = getColorHex(p.color);
 
         return `
         <div class="col-sm-6 col-md-4 col-lg-3">
@@ -356,14 +373,16 @@ function clearAllFilters() {
 
 async function triggerUpdate() {
     const btn = document.getElementById('btnUpdate');
+    const icon = document.getElementById('updateIcon');
+    
     btn.disabled = true;
-    btn.innerText = '⌛ Güncelleniyor...';
+    icon.classList.add('spinning');
     
     await fetch('/api/update', { method: 'POST' });
     
     setTimeout(() => {
         btn.disabled = false;
-        btn.innerText = '🔄 Verileri Güncelle';
+        icon.classList.remove('spinning');
         loadFilters();
         loadProducts();
     }, 10000);
