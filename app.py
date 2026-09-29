@@ -46,7 +46,7 @@ def disable_browser_cache(response):
 COLOR_MAPPING = [
     # 1. ÖZEL İSTİSNALAR VE DİREKT EŞLEŞMELER
     (r"(?=.*stone)(?=.*mercan)", "Kırmızı"),
-    (r"star|simli|glitter|sparkle", "Mavi"),  # Simli/Star serileri öncelikli Mavi
+    (r"star|simli|glitter|sparkle", "Mavi"),
 
     # 2. MAVİ VE PEMBE
     (r"mavi|blue|lacivert|navy|bebek\s*mavisi|bebek\s*mavi|buz|ice|sky|gök|gok|turkuaz|teal|cyan|sapphire|ocean|okyanus|azure|cobalt|kobalt", "Mavi"),
@@ -109,7 +109,7 @@ EXCLUDE_TERMS = [
 
 KNOWN_BRANDS = [
     "Microzey", "Porima", "Filamix", "Beta Filament", "R3D", "Creality", "Anycubic", 
-    "Sunlu", "eSUN", "Polymaker", "Elegoo", "Spectrum", "Formfutura", "Bambu Lab", "Filenta"
+    "Sunlu", "eSUN", "Esun", "Polymaker", "Elegoo", "Spectrum", "Formfutura", "Bambu Lab", "Filenta", "Kingroon"
 ]
 
 
@@ -285,53 +285,74 @@ def scrape_shopify(source: dict, headers: dict) -> list[dict]:
 
 def scrape_robitshop(source: dict, headers: dict) -> list[dict]:
     items = []
-    cat_urls = [
-        "https://www.robitshop.com/kategori/filament-1",
-        "https://www.robitshop.com/kategori/abs-filamentler",
-        "https://www.robitshop.com/kategori/pet-g-filament"
-    ]
+    base_cat_url = "https://www.robitshop.com/kategori/filament-1"
+    
+    page = 1
+    max_pages = 20
 
-    for cat_url in cat_urls:
+    while page <= max_pages:
+        cat_url = f"{base_cat_url}?sayfa={page}" if page > 1 else base_cat_url
         try:
             res = requests.get(cat_url, headers=headers, timeout=12)
-            if res.status_code != 200: continue
+            if res.status_code != 200:
+                break
 
             soup = BeautifulSoup(res.text, "html.parser")
             product_elements = soup.find_all("div", class_=re.compile(r"product-item|showcase|ItemOrj", re.I))
 
+            if not product_elements:
+                break
+
+            added_in_this_page = 0
+
             for elem in product_elements:
+                elem_html = str(elem).lower()
+                if "stokta yok" in elem_html or "tukendi" in elem_html or "tükendi" in elem_html:
+                    continue
+
                 title_elem = elem.find(["a", "div", "span"], class_=re.compile(r"product-title|productName|title", re.I)) or elem.find("a")
                 price_elem = elem.find(["span", "div"], class_=re.compile(r"price|fiyat|discountPrice", re.I))
                 img_elem = elem.find("img")
 
                 if title_elem and price_elem:
                     name = clean_text(title_elem.get_text(strip=True))
-                    if not is_valid_filament(name): continue
+                    if not is_valid_filament(name):
+                        continue
 
                     price = price_number(price_elem.get_text(strip=True))
-                    if not price or price <= 0: continue
+                    if not price or price <= 0:
+                        continue
 
                     href = title_elem.get("href") or (elem.find("a").get("href") if elem.find("a") else "")
                     prod_url = urljoin("https://www.robitshop.com", href) if href else cat_url
 
                     img_src = ""
                     if img_elem:
-                        img_src = img_elem.get("data-src") or img_elem.get("src") or ""
+                        img_src = img_elem.get("data-src") or img_elem.get("src") or img_elem.get("data-original") or ""
                         if img_src and not img_src.startswith("http"):
                             img_src = urljoin("https://www.robitshop.com", img_src)
 
-                    items.append({
-                        "source": source["name"],
-                        "external_id": str(hash(name)),
-                        "name": name,
-                        "price": price,
-                        "old_price": None,
-                        "in_stock": 1,
-                        "url": prod_url,
-                        "image": img_src
-                    })
+                    if not any(p["url"] == prod_url for p in items):
+                        items.append({
+                            "source": source["name"],
+                            "external_id": str(hash(prod_url)),
+                            "name": name,
+                            "price": price,
+                            "old_price": None,
+                            "in_stock": 1,
+                            "url": prod_url,
+                            "image": img_src
+                        })
+                        added_in_this_page += 1
+
+            if added_in_this_page == 0 and page > 1:
+                break
+
+            page += 1
+
         except Exception as e:
             print(f"Robitshop Tarama Hatası ({cat_url}): {e}")
+            break
 
     return items
 
