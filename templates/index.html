@@ -12,7 +12,8 @@
             font-family: 'Montserrat', sans-serif !important; 
         }
 
-        body { background-color: #f4f6f9; }
+        /* GÖZ YORMAYAN SOFT BETON GRİSİ / AÇIK GRİ ARKA PLAN */
+        body { background-color: #e8ecf0; }
         
         /* KOYU HARDAL ZEMİN VE GEOMETRİK BALIKSIRTI/CHEVRON DESENİ */
         .hero-banner {
@@ -22,7 +23,7 @@
                 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cpath fill='%23b3891d' fill-opacity='0.22' d='M0 0l20 20v20L0 20V0zm40 0l20 20v20L40 20V0zm-20 20l20 20v20L20 40V20zm40 0l20 20v20L60 40V20zm-60 20l20 20v20L0 60V40zm40 0l20 20v20L40 60V40zM20 0L0 20v20l20-20V0zm40 0L40 20v20l20-20V0zm-20 20L20 40v20l20-20V20zm40 0L60 40v20l20-20V20zm-60 20L0 60v20l20-20V40zm40 0L40 60v20l20-20V40z'/%3E%3C/svg%3E");
             background-size: cover, 60px 60px;
             border-bottom: 5px solid #4a3707;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.25);
             padding: 3rem 1rem 1.8rem 1rem;
             position: relative;
             text-align: center;
@@ -79,19 +80,13 @@
             box-shadow: 0 0 15px rgba(255, 255, 255, 0.9);
         }
 
-        /* UYUMLU İÇ İÇE SUTUN ARAMA KUTUSU VE BUTONU */
-        .search-input-custom {
-            font-size: 0.88rem;
-            font-weight: 500;
-            padding: 0.45rem 0.8rem;
-            border-radius: 8px 0 0 8px !important;
-        }
-
         .btn-update-icon {
             background: linear-gradient(135deg, #d4af37 0%, #aa7c11 100%);
+            color: #e2e8f0;
             border: 1px solid #e6ca65;
-            border-radius: 0 8px 8px 0 !important;
-            padding: 0.45rem 1rem;
+            border-top-right-radius: 8px;
+            border-bottom-right-radius: 8px;
+            padding: 0 16px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -101,18 +96,20 @@
 
         .btn-update-icon:hover {
             background: linear-gradient(135deg, #e6ca65 0%, #c59b27 100%);
+            color: #ffffff;
+            transform: scale(1.02);
             box-shadow: 0 4px 12px rgba(184, 134, 11, 0.4);
         }
 
-        /* AÇIK GRİ / GÜMÜŞ İKON STİLİ */
-        .spin-icon {
-            display: inline-block;
-            color: #e2e8f0;
-            font-size: 1.1rem;
-            font-weight: bold;
-            line-height: 1;
-            transition: transform 0.5s ease;
-            text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+        .svg-icon {
+            width: 18px;
+            height: 18px;
+            fill: #e2e8f0;
+            transition: transform 0.5s ease, fill 0.2s;
+        }
+
+        .btn-update-icon:hover .svg-icon {
+            fill: #ffffff;
         }
 
         .spinning {
@@ -124,6 +121,11 @@
             100% { transform: rotate(360deg); }
         }
 
+        .search-input-custom {
+            font-size: 0.88rem;
+            padding: 0.45rem 0.8rem;
+        }
+
         .btn-clear-custom {
             font-size: 0.88rem;
             font-weight: 600;
@@ -132,8 +134,15 @@
             transition: all 0.2s ease;
         }
 
-        .card { border: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); transition: transform 0.2s, box-shadow 0.2s; overflow: hidden; }
-        .card:hover { transform: translateY(-4px); box-shadow: 0 8px 20px rgba(0,0,0,0.1); }
+        .card { 
+            border: 1px solid #dcdfe4; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.04); 
+            transition: transform 0.2s, box-shadow 0.2s; 
+            overflow: hidden; 
+            background-color: #ffffff;
+        }
+        .card:hover { transform: translateY(-4px); box-shadow: 0 8px 20px rgba(0,0,0,0.08); }
         .product-img-container { height: 200px; background-color: #ffffff; display: flex; align-items: center; justify-content: center; padding: 15px; border-bottom: 1px solid #f0f0f0; position: relative; }
         .product-img { max-height: 100%; max-width: 100%; object-fit: contain; }
         .price-tag { font-size: 1.3rem; font-weight: 700; color: #198754; }
@@ -189,7 +198,9 @@
                 <div class="input-group">
                     <input type="text" id="searchQuery" class="form-control search-input-custom" placeholder="Filament adı veya renk ara..." onkeyup="loadProducts()">
                     <button id="btnUpdate" class="btn btn-update-icon" title="Verileri Güncelle" onclick="triggerUpdate()">
-                        <span id="updateIcon" class="spin-icon">↻</span>
+                        <svg id="updateIcon" class="svg-icon" viewBox="0 0 24 24">
+                            <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
+                        </svg>
                     </button>
                 </div>
             </div>
