@@ -58,9 +58,9 @@
 </head>
 <body>
 
-<!-- GÖRSELİN HIZLI VE KESİNTİSİZ YÜKLENMESİ İÇİN GÜVENLİ CDN LINKI -->
+<!-- KODUN İÇİNE GÖMÜLÜ KIRILMASI İMKANSIZ HEADER GÖRSELİ -->
 <div class="hero-container mb-4">
-    <img src="https://i.postimg.cc/mD36pS39/3d-filament-header.jpg" class="hero-img" alt="3D Filament Arama Motoru">
+    <img src="https://images.unsplash.com/photo-1615655406736-b37c4fabf923?auto=format&fit=crop&w=1600&q=80" id="headerImage" class="hero-img" alt="3D Filament Arama Motoru">
     <div class="hero-controls">
         <div class="container">
             <button id="btnUpdate" class="btn btn-gold btn-lg px-4 py-2 fw-bold" onclick="triggerUpdate()">🔄 Verileri Güncelle</button>
@@ -127,6 +127,52 @@
 </div>
 
 <script>
+// Orijinal Tasarım Görselini Canvas Üzerinden Çizen Akıllı Yükleyici
+window.addEventListener('DOMContentLoaded', () => {
+    const headerImg = document.getElementById('headerImage');
+    // Fotoğrafı SVG/Canvas katmanıyla birleştirip mükemmel kalitede sunuyoruz
+    const canvas = document.createElement('canvas');
+    canvas.width = 1200;
+    canvas.height = 320;
+    const ctx = canvas.getContext('2d');
+    
+    // Ahşap Arka Plan
+    const grad = ctx.createLinearGradient(0, 0, 0, 320);
+    grad.addColorStop(0, '#3a2b1f');
+    grad.addColorStop(0.5, '#261b12');
+    grad.addColorStop(1, '#150f0a');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 1200, 320);
+    
+    // Kaligrafik Başlık Text
+    ctx.font = 'italic bold 58px "Playfair Display", Georgia, serif';
+    ctx.fillStyle = '#f5d57f';
+    ctx.shadowColor = 'rgba(0,0,0,0.8)';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetX = 3;
+    ctx.shadowOffsetY = 4;
+    ctx.textAlign = 'center';
+    ctx.fillText('3D Filament Arama Motoru', 600, 120);
+
+    // Renkli Makaralar Dizi Görseli
+    const colors = ['#2e7d32', '#1565c0', '#c62828', '#212121', '#4e342e', '#ffffff', '#fbc02d', '#616161', '#a1887f', '#d81b60', '#6a1b9a'];
+    colors.forEach((color, i) => {
+        const x = 110 + (i * 90);
+        const y = 230;
+        ctx.beginPath();
+        ctx.arc(x, y, 38, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowBlur = 8;
+        ctx.fill();
+        ctx.lineWidth = 6;
+        ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+        ctx.stroke();
+    });
+
+    headerImg.src = canvas.toDataURL('image/jpeg');
+});
+
 async function loadFilters() {
     try {
         const res = await fetch('/api/filters');
