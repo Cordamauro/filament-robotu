@@ -42,67 +42,50 @@ def disable_browser_cache(response):
     return response
 
 
-# DEV RENK HARİTASI (İngilizce, Türkçe, Tonlar ve Fantezi İsimler)
+# ÖZEL RENK MAPPING KURAL MOTORU (Sıralama Önceliklidir!)
 COLOR_MAPPING = [
-    # Renk Geçişi
-    (r"color\s*shift|renk\s*geçiş|transition|rainbow|dual[- ]?color|tri[- ]?color|co[- ]?ex", "Renk Geçişi"),
-    
-    # Army Yeşil
-    (r"army", "Army Yeşil"),
+    # 1. KESİN KURAL: İsminde geçen kelime başka hiçbir sınıfa girmesin!
+    (r"beyaz|ral\s*9003", "Beyaz"),
+    (r"kahverengi|kahve|tuğla|mocha", "Kahverengi"),
+    (r"mor", "Mor"),
+    (r"gümüş", "Gümüş"),
 
-    # Yeşil (Matcha, Haki, Olive, Fıstık vb.)
+    # 2. ÖZEL İSTEDİĞİN SINIFLANDIRMALAR
+    (r"army", "Army"),
+    (r"bakır", "Bakır"),
+    (r"natural|naturel|şeffaf|transparent|clear", "Şeffaf"),
+    (r"wood", "Wood"),
+    (r"ten|somon|salmon|skin|flesh|latte", "Ten"),
+
+    # 3. DİĞER RENK SINIFLARI
+    (r"color\s*shift|renk\s*geçiş|transition|rainbow|dual[- ]?color|tri[- ]?color|co[- ]?ex", "Renk Geçişi"),
     (r"yeşil|green|matcha|haki|khaki|olive|zeytin|mint|nane|fıstık|emerald|zümrüt|lime|çim|grass|pistachio|forest|orman", "Yeşil"),
-    
-    # Mavi & Lacivert
     (r"lacivert|navy|dark\s*blue", "Lacivert"),
     (r"mavi|blue|buz|ice|sky|gök|turkuaz|teal|cyan|sapphire|ocean|okyanus|azure|cobalt|kobalt", "Mavi"),
-    
-    # Kırmızı, Somon, Mercan
     (r"bordo|burgundy|maroon", "Bordo"),
-    (r"kırmızı|red|crimson|ruby|sakura|somun|somon|salmon|mercan|coral|peach|şeftali|al", "Kırmızı"),
-    
-    # Sarı, Altın, Bakır
-    (r"altın|gold|bronz|bronze|copper|bakır", "Altın"),
+    (r"kırmızı|red|crimson|ruby|sakura|somun|mercan|coral|peach|şeftali|al", "Kırmızı"),
+    (r"altın|gold|bronz|bronze|copper", "Altın"),
     (r"sarı|yellow|limon|lemon|mustard|hardal", "Sarı"),
-    
-    # Turuncu
     (r"turuncu|orange|amber|kehrİbar", "Turuncu"),
-    
-    # Pembe & Mor & Lila
     (r"pembe|pink|magenta|fuchsia|fuşya", "Pembe"),
-    (r"mor|purple|violet|lila|lilac|lavanta|lavender|erik|plum", "Mor"),
-    
-    # Siyah & Füme
+    (r"lila|lilac|violet|lavanta|lavender|erik|plum", "Mor"),
     (r"siyah|black|dark|gece|obsidian|antrasit|anthracite|gece\s*buzu", "Siyah"),
-    
-    # Beyaz & Krem
-    (r"beyaz|white|kar|snow|fildişi|ivory|krem|cream|kemik", "Beyaz"),
-    
-    # Gri (Stone, Kil, Granit vb.)
-    (r"gümüş|silver", "Gümüş"),
+    (r"silver", "Gümüş"),
     (r"gri|grey|gray|stone|kil|granit|rock|metal|titanium|titanyum|çelik|steel|fÜme", "Gri"),
-    
-    # Kahverengi (Mocha, Tuğla vb.)
-    (r"mocha|tuğla|kahve|brown|chocolate|çikolata|ahşap|wood|hazel|fındık", "Kahverengi"),
-
-    # Ten (Latte, Skin vb.)
-    (r"latte|ten|skin|flesh", "Ten"),
-
-    # Bej & Doğal / Şeffaf
-    (r"bej|beige|naturel|natural|doğal|şeffaf|transparent|clear", "Doğal/Bej")
+    (r"bej|beige", "Bej")
 ]
 
 COLOR_ALIASES = {
     "sarı": ["sari", "yellow"],
     "kırmızı": ["kirmizi", "red"],
-    "beyaz": ["beyaz", "white"],
+    "beyaz": ["beyaz", "white", "ral9003"],
     "siyah": ["siyah", "black"],
     "mavi": ["mavi", "blue"],
     "yeşil": ["yesil", "green", "haki", "matcha"],
     "gümüş": ["gumus", "silver"],
     "altın": ["altin", "gold"],
     "somon": ["somon", "salmon"],
-    "şeffaf": ["seffaf", "transparent", "clear"]
+    "şeffaf": ["seffaf", "transparent", "clear", "natural", "naturel"]
 }
 
 MATERIAL_PATTERNS = [
@@ -172,7 +155,7 @@ def detect_color(name: str) -> str:
     for pattern, normalized_color in COLOR_MAPPING:
         if re.search(pattern, name, re.I):
             return normalized_color
-    return "Doğal / Özel Renk"
+    return "Diğer / Özel Renk"
 
 
 def infer(name: str, source: str) -> dict:
