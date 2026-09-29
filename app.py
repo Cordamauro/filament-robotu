@@ -48,11 +48,37 @@ COLOR_SHIFT_PATTERNS = re.compile(
     re.I
 )
 
-COLOR_WORDS = [
-    "siyah", "beyaz", "kırmızı", "mavi", "yeşil", "sarı", "turuncu", "mor", "pembe", 
-    "gri", "gümüş", "altın", "kahve", "bej", "mint", "turkuaz", "lila", "şeffaf", 
-    "doğal", "naturel", "natural", "bordo", "lacivert", "antrasit", "bronz", "bakır", 
-    "ten", "somun", "somon", "sakura", "gold", "silver", "yellow", "white", "black", "red", "blue", "green"
+# Genişletilmiş Renk Sözlüğü & İngilizce/Fantezi İsim Haritası
+COLOR_MAPPING = [
+    # Renk Geçişi
+    (r"color\s*shift|renk\s*geçiş|transition|rainbow|dual[- ]?color|tri[- ]?color", "Renk Geçişi"),
+    # Siyah & Tonları
+    (r"siyah|black|dark|gece|obsidian|antrasit|anthracite", "Siyah"),
+    # Beyaz & Tonları
+    (r"beyaz|white|kar|snow|fildişi|ivory", "Beyaz"),
+    # Kırmızı & Bordo
+    (r"bordo|burgundy|maroon", "Bordo"),
+    (r"kırmızı|red|crimson|ruby|sakura|somun|somon|peach", "Kırmızı"),
+    # Mavi & Lacivert Tonları
+    (r"lacivert|navy|dark\s*blue", "Lacivert"),
+    (r"mavi|blue|buz|ice|sky|gök|turkuaz|teal|cyan|sapphire|ocean|okyanus", "Mavi"),
+    # Yeşil Tonları
+    (r"yeşil|green|mint|nane|fıstık|olive|zeytin|emerald|zümrüt|lime", "Yeşil"),
+    # Sarı & Altın
+    (r"altın|gold|bronz|bronze|copper|bakır", "Altın"),
+    (r"sarı|yellow|limon|lemon", "Sarı"),
+    # Turuncu
+    (r"turuncu|orange|amber", "Turuncu"),
+    # Mor & Pembe & Lila
+    (r"pembe|pink|magenta", "Pembe"),
+    (r"mor|purple|violet|lila|lilac|lavanta|lavender", "Mor"),
+    # Gri & Gümüş
+    (r"gümüş|silver", "Gümüş"),
+    (r"gri|grey|gray|metal|titanium|titanyum", "Gri"),
+    # Kahverengi & Bej & Ten
+    (r"ten|skin|flesh", "Ten"),
+    (r"bej|beige|naturel|natural|doğal|şeffaf|transparent|clear", "Doğal/Bej"),
+    (r"kahve|brown|chocolate|çikolata|ahşap|wood", "Kahverengi")
 ]
 
 COLOR_ALIASES = {
@@ -77,8 +103,9 @@ MATERIAL_PATTERNS = [
     ("PC", r"\bPC\b"), ("PLA", r"\bPLA\b")
 ]
 
+# KESİNLİKLE ENGELLENEN PARÇA VE AKSESUAR KELİMELERİ (HUB, SPLITTER EKLENDİ)
 EXCLUDE_TERMS = [
-    "cutter", "tube", "replacement", "ptfe", "kesici", "borusu", "bıçak", "makas",
+    "hub", "splitter", "buffer", "feeder", "cutter", "tube", "replacement", "ptfe", "kesici", "borusu", "bıçak", "makas",
     "nozzle", "hotend", "extruder", "kurutucu", "dryer", "dry box", "vakum", "poşet",
     "reçine", "resin", "3d kalem", "spatula", "sprey", "rulman", "soğutucu", "fan",
     "step motor", "baskı tablası", "peı", "tabla", "sensör", "sensor", "yazıcı", "printer",
@@ -131,16 +158,18 @@ def is_valid_filament(name: str) -> bool:
     return True
 
 
+def detect_color(name: str) -> str:
+    """İngilizce veya fantezi renk isimlerini Türkçe kök renklere dönüştürür."""
+    for pattern, normalized_color in COLOR_MAPPING:
+        if re.search(pattern, name, re.I):
+            return normalized_color
+    return "Belirtilmemiş"
+
+
 def infer(name: str, source: str) -> dict:
     upper = name.upper()
     material = next((label for label, pattern in MATERIAL_PATTERNS if re.search(pattern, upper, re.I)), "PLA")
-    
-    # Renk Geçişi Kontrolü (Öncelikli Kural)
-    if COLOR_SHIFT_PATTERNS.search(name):
-        color = "Renk Geçişi"
-    else:
-        color = next((c.title() for c in COLOR_WORDS if c in name.casefold()), "Belirtilmemiş")
-        
+    color = detect_color(name)
     brand = next((b for b in KNOWN_BRANDS if b.casefold() in name.casefold()), source)
     return {"brand": brand, "material": material, "color": color, "weight_g": 1000}
 
