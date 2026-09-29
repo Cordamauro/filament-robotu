@@ -84,7 +84,6 @@
             box-shadow: 0 0 15px rgba(245, 215, 127, 0.9);
         }
 
-        /* İÇE GÖMÜLÜ SADE VERİLERİ GÜNCELLE İKON BUTONU */
         .btn-update-icon {
             background: linear-gradient(135deg, #d4af37 0%, #aa7c11 100%);
             color: #ffffff;
@@ -118,6 +117,15 @@
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
+        }
+
+        /* KÜÇÜLTÜLMÜŞ ÖZEL FİLTRELERİ TEMİZLE BUTONU STİLİ */
+        .btn-clear-custom {
+            font-size: 0.88rem;
+            font-weight: 600;
+            padding: 0.45rem 0.8rem;
+            border-radius: 8px;
+            transition: all 0.2s ease;
         }
 
         .card { border: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); transition: transform 0.2s, box-shadow 0.2s; overflow: hidden; }
@@ -173,7 +181,6 @@
                 </select>
             </div>
 
-            <!-- ARAMA KUTUSU VE SAĞINA EKLENEN İKON BUTON -->
             <div class="col-md-9 mt-3">
                 <div class="input-group">
                     <input type="text" id="searchQuery" class="form-control form-control-lg" placeholder="Filament adı veya renk ara..." onkeyup="loadProducts()">
@@ -183,8 +190,9 @@
                 </div>
             </div>
             
+            <!-- KÜÇÜLTÜLMÜŞ FİLTRELERİ TEMİZLE BUTONU -->
             <div class="col-md-3 mt-3 d-flex align-items-end">
-                <button class="btn btn-outline-danger btn-lg w-100 fw-semibold" onclick="clearAllFilters()">🧹 Filtreleri Temizle</button>
+                <button class="btn btn-outline-danger btn-clear-custom w-100" onclick="clearAllFilters()">🧹 Filtreleri Temizle</button>
             </div>
         </div>
     </div>
