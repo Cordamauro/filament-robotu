@@ -12,7 +12,7 @@
             font-family: 'Montserrat', sans-serif !important; 
         }
 
-        /* DAHA KOYU VE BELİRGİN BETON GRİSİ S AYFA ARKA PLANI */
+        /* BELİRGİN BETON GRİSİ SAYFA ARKA PLANI */
         body { background-color: #dce2e8; }
         
         /* KOYU HARDAL ZEMİN VE GEOMETRİK BALIKSIRTI/CHEVRON DESENİ */
@@ -144,7 +144,7 @@
         }
         .card:hover { transform: translateY(-4px); box-shadow: 0 8px 20px rgba(0,0,0,0.12); }
         
-        /* ÜRÜN GÖRSEL KUTUSU: ESKİ AÇIK GRİ/BEYAZIMSI ARKA PLAN */
+        /* ÜRÜN GÖRSEL KUTUSU (SOFT BEYAZ-BETON ARASI TAZELENMİŞ TON) */
         .product-img-container { 
             height: 200px; 
             background-color: #e8ecf0; 
@@ -156,7 +156,15 @@
             position: relative; 
         }
         
-        .product-img { max-height: 100%; max-width: 100%; object-fit: contain; }
+        /* BEYAZ ARKA PLANLARI ŞEFFAFLAŞTIRIP KATALOG RENGİNE BÜRÜNDÜREN BİLLEŞEN */
+        .product-img { 
+            max-height: 100%; 
+            max-width: 100%; 
+            object-fit: contain; 
+            mix-blend-mode: multiply; 
+            filter: contrast(102%);
+        }
+
         .price-tag { font-size: 1.3rem; font-weight: 700; color: #198754; }
         .stock-badge { position: absolute; top: 10px; right: 10px; font-size: 0.75rem; z-index: 2; font-weight: 600; }
         .result-count-bar { font-size: 0.95rem; color: #343a40; font-weight: 600; margin-bottom: 1rem; }
