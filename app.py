@@ -72,16 +72,27 @@ def detect_color(name):
                 return main_color
     return "Mavi"
 
-# --- PORİMA İÇİN DÜZELTİLMİŞ SHOPIFY SCRAPER ---
+# --- PORİMA İÇİN SAYFALAMALI SHOPIFY SCRAPER ---
 def scrape_shopify(source_name, base_url):
     products = []
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-    try:
-        url = base_url if base_url.endswith("/products.json") else f"{base_url.rstrip('/')}/products.json"
-        res = requests.get(url, headers=headers, timeout=15)
-        if res.status_code == 200:
+    
+    clean_base = base_url.replace('/products.json', '').rstrip('/')
+    
+    page = 1
+    while True:
+        try:
+            url = f"{clean_base}/products.json?page={page}&limit=250"
+            res = requests.get(url, headers=headers, timeout=15)
+            if res.status_code != 200:
+                break
+                
             data = res.json()
-            for p in data.get("products", []):
+            raw_products = data.get("products", [])
+            if not raw_products:
+                break  # Sayfada ürün kalmayınca döngüden çık
+                
+            for p in raw_products:
                 title = p.get("title", "")
                 brand = p.get("vendor") or source_name
                 image_url = p["images"][0]["src"] if p.get("images") else ""
@@ -97,7 +108,7 @@ def scrape_shopify(source_name, base_url):
                     v_title = v.get("title", "")
                     full_name = f"{title} - {v_title}" if v_title and v_title != "Default Title" else title
                     prod_id = f"{source_name}_{v.get('id')}"
-                    prod_url = f"{base_url.replace('/products.json', '')}/products/{p.get('handle')}"
+                    prod_url = f"{clean_base}/products/{p.get('handle')}"
                     
                     products.append({
                         "id": prod_id,
@@ -112,8 +123,11 @@ def scrape_shopify(source_name, base_url):
                         "url": prod_url,
                         "image": image_url
                     })
-    except Exception as e:
-        print(f"Scrape Hatası ({source_name}): {e}")
+            page += 1
+        except Exception as e:
+            print(f"Scrape Hatası ({source_name}): {e}")
+            break
+            
     return products
 
 # --- ROBITSHOP SCRAPER ---
