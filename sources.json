@@ -1,5 +1,5 @@
 [
   { "name": "Porima 3D", "kind": "shopify", "url": "https://porima3d.com/products.json", "enabled": true },
   { "name": "Microzey", "kind": "shopify", "url": "https://microzey.com/products.json", "enabled": true },
-  { "name": "Filamix", "kind": "shopify", "url": "https://www.filamix.com.tr/products.json", "enabled": true },
+  { "name": "Filamix", "kind": "shopify", "url": "https://www.filamix.com.tr/products.json", "enabled": true }
 ]
