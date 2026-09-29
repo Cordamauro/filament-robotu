@@ -1,7 +1,5 @@
 [
   { "name": "Porima 3D", "kind": "shopify", "url": "https://porima3d.com/products.json", "enabled": true },
   { "name": "Microzey", "kind": "shopify", "url": "https://microzey.com/products.json", "enabled": true },
-  { "name": "Teknik Filament 3D", "kind": "shopify", "url": "https://www.teknikfilament3d.com/products.json", "enabled": true },
-  { "name": "Flexis3D", "kind": "shopify", "url": "https://flexis3d.com/products.json", "enabled": true },
-  { "name": "3Dcim", "kind": "shopify", "url": "https://3dcim.com/products.json", "enabled": true }
+  { "name": "Filamix", "kind": "shopify", "url": "https://www.filamix.com.tr/products.json", "enabled": true },
 ]
