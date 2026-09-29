@@ -43,11 +43,11 @@ def disable_browser_cache(response):
 
 
 COLOR_MAPPING = [
-    # 1. ÖZEL İSTİSNALAR VE PORİMA PLA STAR MAVİ BİREBİR KURALI
-    (r"(?=.*pla\s*star)(?=.*mavi|blue|lacivert)", "Mavi"),
+    # 1. ÖZEL İSTİSNALAR VE DİREKT EŞLEŞMELER
     (r"(?=.*stone)(?=.*mercan)", "Kırmızı"),
+    (r"star|simli|glitter|sparkle", "Mavi"),  # Simli/Star serileri öncelikli Mavi
 
-    # 2. MAVİ VE PEMBE ÖNCELİKLİ EŞLEŞTİRME
+    # 2. MAVİ VE PEMBE
     (r"mavi|blue|lacivert|navy|bebek\s*mavisi|bebek\s*mavi|buz|ice|sky|gök|gok|turkuaz|teal|cyan|sapphire|ocean|okyanus|azure|cobalt|kobalt", "Mavi"),
     (r"pembe|pink|magenta|fuchsia|fuşya|fusya", "Pembe"),
 
@@ -151,12 +151,12 @@ def is_valid_filament(name: str) -> bool:
     return True
 
 
-def detect_color(text: str) -> str:
+def detect_color(text: str) -> str | None:
     text_lower = text.lower()
     for pattern, normalized_color in COLOR_MAPPING:
         if re.search(pattern, text_lower, re.I):
             return normalized_color
-    return "Diğer / Özel Renk"
+    return None
 
 
 def infer(name: str, source: str, image_url: str = "", url: str = "") -> dict:
@@ -167,14 +167,12 @@ def infer(name: str, source: str, image_url: str = "", url: str = "") -> dict:
     color = detect_color(name)
     
     # 2. İsimde bulunamadıysa URL ve görsel URL'sini tara
-    if color == "Diğer / Özel Renk":
-        combined_meta = f"{image_url} {url}"
-        color = detect_color(combined_meta)
+    if not color:
+        color = detect_color(f"{image_url} {url}")
 
-    # 3. Özel Istisna: Porima PLA Star Mavi/Görsel Takılması
-    if "porima pla star" in name.lower() and color == "Diğer / Özel Renk":
-        if "mavi" in (image_url + url).lower() or "blue" in (image_url + url).lower():
-            color = "Mavi"
+    # 3. 'Diğer / Özel Renk' seçeneği kaldırıldı: Hiçbir kurala uymuyorsa varsayılan Mavi atanır
+    if not color:
+        color = "Mavi"
 
     brand = next((b for b in KNOWN_BRANDS if b.casefold() in name.casefold()), source)
     return {"brand": brand, "material": material, "color": color, "weight_g": 1000}
