@@ -14,41 +14,36 @@
 
         body { background-color: #f4f6f9; }
         
+        /* KOYU HARDAL ZEMİN VE GEOMETRİK BALIKSIRTI/CHEVRON DESENİ */
         .hero-banner {
-            background: radial-gradient(circle at center, #3d2b1f 0%, #1a120b 100%);
-            border-bottom: 5px solid #b8860b;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+            background-color: #7a5c10;
+            background-image: 
+                radial-gradient(circle at center, rgba(220, 175, 40, 0.25) 0%, rgba(60, 42, 5, 0.65) 100%),
+                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cpath fill='%23b3891d' fill-opacity='0.22' d='M0 0l20 20v20L0 20V0zm40 0l20 20v20L40 20V0zm-20 20l20 20v20L20 40V20zm40 0l20 20v20L60 40V20zm-60 20l20 20v20L0 60V40zm40 0l20 20v20L40 60V40zM20 0L0 20v20l20-20V0zm40 0L40 20v20l20-20V0zm-20 20L20 40v20l20-20V20zm40 0L60 40v20l20-20V20zm-60 20L0 60v20l20-20V40zm40 0L40 60v20l20-20V40z'/%3E%3C/svg%3E");
+            background-size: cover, 60px 60px;
+            border-bottom: 5px solid #4a3707;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.35);
             padding: 3rem 1rem 1.8rem 1rem;
             position: relative;
             text-align: center;
-        }
-
-        .hero-banner::before {
-            content: "";
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: linear-gradient(90deg, rgba(212,175,55,0.05) 1px, transparent 1px),
-                        linear-gradient(rgba(212,175,55,0.05) 1px, transparent 1px);
-            background-size: 20px 20px;
-            pointer-events: none;
         }
 
         .hero-title {
             font-style: italic;
             font-size: 3.2rem;
             font-weight: 700;
-            color: #f5d77f;
-            text-shadow: 2px 4px 8px rgba(0, 0, 0, 0.9), 0 0 20px rgba(184, 134, 11, 0.4);
+            color: #ffffff;
+            text-shadow: 2px 4px 10px rgba(0, 0, 0, 0.85), 0 0 15px rgba(255, 230, 150, 0.4);
             letter-spacing: 0.5px;
             margin-bottom: 0.5rem;
         }
 
         .hero-subtitle {
-            color: #d1c0a5;
+            color: #fceea7;
             font-size: 1.05rem;
-            font-weight: 500;
+            font-weight: 600;
             letter-spacing: 0.5px;
-            text-shadow: 1px 1px 4px #000;
+            text-shadow: 1px 2px 6px rgba(0, 0, 0, 0.9);
             margin-bottom: 1.5rem;
         }
 
@@ -67,7 +62,7 @@
             width: 32px;
             height: 32px;
             border-radius: 50%;
-            border: 2px solid rgba(255,255,255,0.3);
+            border: 2px solid rgba(255,255,255,0.4);
             box-shadow: 0 4px 8px rgba(0,0,0,0.5), inset 0 0 6px rgba(0,0,0,0.4);
             transition: all 0.2s ease;
             cursor: pointer;
@@ -75,13 +70,13 @@
 
         .spool-dot:hover { 
             transform: scale(1.25); 
-            border-color: #f5d77f;
+            border-color: #ffffff;
         }
 
         .spool-dot.active {
             transform: scale(1.3);
-            border: 3px solid #f5d77f;
-            box-shadow: 0 0 15px rgba(245, 215, 127, 0.9);
+            border: 3px solid #ffffff;
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.9);
         }
 
         .btn-update-icon {
@@ -119,7 +114,6 @@
             100% { transform: rotate(360deg); }
         }
 
-        /* KÜÇÜLTÜLMÜŞ ÖZEL FİLTRELERİ TEMİZLE BUTONU STİLİ */
         .btn-clear-custom {
             font-size: 0.88rem;
             font-weight: 600;
@@ -190,7 +184,6 @@
                 </div>
             </div>
             
-            <!-- KÜÇÜLTÜLMÜŞ FİLTRELERİ TEMİZLE BUTONU -->
             <div class="col-md-3 mt-3 d-flex align-items-end">
                 <button class="btn btn-outline-danger btn-clear-custom w-100" onclick="clearAllFilters()">🧹 Filtreleri Temizle</button>
             </div>
