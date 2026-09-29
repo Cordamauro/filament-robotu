@@ -79,13 +79,19 @@
             box-shadow: 0 0 15px rgba(255, 255, 255, 0.9);
         }
 
+        /* UYUMLU İÇ İÇE SUTUN ARAMA KUTUSU VE BUTONU */
+        .search-input-custom {
+            font-size: 0.88rem;
+            font-weight: 500;
+            padding: 0.45rem 0.8rem;
+            border-radius: 8px 0 0 8px !important;
+        }
+
         .btn-update-icon {
             background: linear-gradient(135deg, #d4af37 0%, #aa7c11 100%);
-            color: #ffffff;
             border: 1px solid #e6ca65;
-            border-radius: 8px;
-            padding: 0 18px;
-            font-size: 1.2rem;
+            border-radius: 0 8px 8px 0 !important;
+            padding: 0.45rem 1rem;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -95,14 +101,18 @@
 
         .btn-update-icon:hover {
             background: linear-gradient(135deg, #e6ca65 0%, #c59b27 100%);
-            color: #1a1003;
-            transform: scale(1.05);
             box-shadow: 0 4px 12px rgba(184, 134, 11, 0.4);
         }
 
+        /* AÇIK GRİ / GÜMÜŞ İKON STİLİ */
         .spin-icon {
             display: inline-block;
+            color: #e2e8f0;
+            font-size: 1.1rem;
+            font-weight: bold;
+            line-height: 1;
             transition: transform 0.5s ease;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.4);
         }
 
         .spinning {
@@ -177,9 +187,9 @@
 
             <div class="col-md-9 mt-3">
                 <div class="input-group">
-                    <input type="text" id="searchQuery" class="form-control form-control-lg" placeholder="Filament adı veya renk ara..." onkeyup="loadProducts()">
+                    <input type="text" id="searchQuery" class="form-control search-input-custom" placeholder="Filament adı veya renk ara..." onkeyup="loadProducts()">
                     <button id="btnUpdate" class="btn btn-update-icon" title="Verileri Güncelle" onclick="triggerUpdate()">
-                        <span id="updateIcon" class="spin-icon">🔄</span>
+                        <span id="updateIcon" class="spin-icon">↻</span>
                     </button>
                 </div>
             </div>
