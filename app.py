@@ -42,34 +42,36 @@ def disable_browser_cache(response):
     return response
 
 
-# ÖZEL RENK MAPPING KURAL MOTORU (Sıralama ve Kelime Sınırları Düzeltildi)
+# TÜRKÇE KARAKTER UYUMLU VE DETAYLI RENK MAPPING MOTORU
 COLOR_MAPPING = [
-    # 1. KESİN VE ÖNCELİKLİ KURALLAR (Başka renkle karışmayacaklar)
-    (r"\b(beyaz|white|ral\s*9003)\b", "Beyaz"),
-    (r"\b(kahverengi|kahve|tuğla|mocha|brown|chocolate)\b", "Kahverengi"),
-    (r"\b(mor|purple|violet)\b", "Mor"),
-    (r"\b(gümüş|silver)\b", "Gümüş"),
-    (r"\barmy\b", "Army"),
-    (r"\b(bakır|copper)\b", "Bakır"),
-    (r"\b(natural|naturel|şeffaf|transparent|clear)\b", "Şeffaf"),
-    (r"\bwood\b", "Wood"),
-    (r"\b(ten|somon|salmon|skin|flesh|latte)\b", "Ten"),
+    # 1. KESİN VE ÖNCELİKLİ KURALLAR
+    (r"beyaz|white|ral\s*9003", "Beyaz"),
+    (r"kahverengi|kahve|tuğla|mocha|brown|chocolate", "Kahverengi"),
+    (r"mor|purple|violet", "Mor"),
+    (r"gümüş|silver", "Gümüş"),
+    (r"army", "Army"),
+    (r"bakır|copper", "Bakır"),
+    (r"natural|naturel|şeffaf|seffaf|transparent|clear", "Şeffaf"),
+    (r"wood", "Wood"),
+    (r"ten|somon|salmon|skin|flesh|latte", "Ten"),
 
-    # 2. STANDART RENKLER (RAL KODLARINDAN ETKİLENMEYECEK ŞEKİLDE BOUNDARY EKLENDİ)
-    (r"color\s*shift|renk\s*geçiş|transition|rainbow|dual[- ]?color|tri[- ]?color|co[- ]?ex", "Renk Geçişi"),
-    (r"\b(sarı|yellow|limon|lemon|mustard|hardal)\b", "Sarı"),
-    (r"\b(turuncu|orange|amber|kehribar)\b", "Turuncu"),
-    (r"\b(siyah|black|dark|gece|obsidian|antrasit|anthracite)\b", "Siyah"),
-    (r"\b(gri|grey|gray|stone|kil|granit|rock|metal|titanium|titanyum|çelik|steel|füme)\b", "Gri"),
-    (r"\b(lacivert|navy)\b", "Lacivert"),
-    (r"\b(mavi|blue|buz|ice|sky|gök|turkuaz|teal|cyan|sapphire|ocean|okyanus|azure|cobalt|kobalt)\b", "Mavi"),
-    (r"\b(yeşil|green|matcha|haki|khaki|olive|zeytin|mint|nane|fıstık|emerald|zümrüt|lime|çim|grass|pistachio|forest|orman)\b", "Yeşil"),
-    (r"\b(pembe|pink|magenta|fuchsia|fuşya)\b", "Pembe"),
-    (r"\b(bordo|burgundy|maroon)\b", "Bordo"),
-    (r"\b(kırmızı|red|crimson|ruby|sakura|somun|mercan|coral|peach|şeftali|\bal\b)\b", "Kırmızı"),
-    (r"\b(altın|gold|bronz|bronze)\b", "Altın"),
-    (r"\b(lila|lilac|lavanta|lavender|erik|plum)\b", "Mor"),
-    (r"\b(bej|beige)\b", "Bej")
+    # 2. ÖZEL VE PASTEL TONLAR (SU YEŞİLİ VE BEBEK MAVİSİ DAHİL)
+    (r"su\s*yeşili|su\s*yesili|yeşil|yesil|green|matcha|haki|khaki|olive|zeytin|mint|nane|fıstık|emerald|zümrüt|lime|çim|grass|pistachio|forest|orman", "Yeşil"),
+    (r"bebek\s*mavisi|bebek\s*mavi|lacivert|navy|dark\s*blue", "Lacivert"),
+    (r"mavi|blue|buz|ice|sky|gök|gok|turkuaz|teal|cyan|sapphire|ocean|okyanus|azure|cobalt|kobalt", "Mavi"),
+
+    # 3. DİĞER DÜZ VE BİRLEŞİK RENK KATEGORİLERİ
+    (r"color\s*shift|renk\s*geçiş|renk\s*gecis|transition|rainbow|dual[- ]?color|tri[- ]?color|co[- ]?ex", "Renk Geçişi"),
+    (r"sarı|sari|yellow|limon|lemon|mustard|hardal", "Sarı"),
+    (r"turuncu|orange|amber|kehribar", "Turuncu"),
+    (r"siyah|black|dark|gece|obsidian|antrasit|anthracite", "Siyah"),
+    (r"gri|grey|gray|stone|kil|granit|rock|metal|titanium|titanyum|çelik|celik|steel|füme|fume", "Gri"),
+    (r"pembe|pink|magenta|fuchsia|fuşya|fusya", "Pembe"),
+    (r"bordo|burgundy|maroon", "Bordo"),
+    (r"kırmızı|kirmizi|red|crimson|ruby|sakura|somun|mercan|coral|peach|şeftali|seftali", "Kırmızı"),
+    (r"altın|altin|gold|bronz|bronze", "Altın"),
+    (r"lila|lilac|lavanta|lavender|erik|plum", "Mor"),
+    (r"bej|beige", "Bej")
 ]
 
 COLOR_ALIASES = {
@@ -77,8 +79,8 @@ COLOR_ALIASES = {
     "kırmızı": ["kirmizi", "red"],
     "beyaz": ["beyaz", "white", "ral9003"],
     "siyah": ["siyah", "black"],
-    "mavi": ["mavi", "blue"],
-    "yeşil": ["yesil", "green", "haki", "matcha"],
+    "mavi": ["mavi", "blue", "bebek mavisi"],
+    "yeşil": ["yesil", "green", "haki", "matcha", "su yeşili"],
     "gümüş": ["gumus", "silver"],
     "altın": ["altin", "gold"],
     "somon": ["somon", "salmon"],
@@ -149,8 +151,9 @@ def is_valid_filament(name: str) -> bool:
 
 
 def detect_color(name: str) -> str:
+    name_lower = name.lower()
     for pattern, normalized_color in COLOR_MAPPING:
-        if re.search(pattern, name, re.I):
+        if re.search(pattern, name_lower, re.I):
             return normalized_color
     return "Diğer / Özel Renk"
 
