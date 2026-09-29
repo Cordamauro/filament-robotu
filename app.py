@@ -147,20 +147,10 @@ def is_valid_filament(name: str) -> bool:
     name_lower = name.lower()
     if any(term in name_lower for term in EXCLUDE_TERMS):
         return False
-    if "filament" not in name_lower:
-        return False
-    return True
-
-
-def is_robitshop_filament(name: str) -> bool:
-    """Robitshop başlıklarında 'filament' kelimesi geçmeyebileceği için materyal adı kontrolü yapar."""
-    name_lower = name.lower()
-    if any(term in name_lower for term in EXCLUDE_TERMS):
-        return False
+    # Başlıkta filament kelimesi veya filament materyali adı varsa geçerli kabul et
     if "filament" in name_lower:
         return True
-    # Başlıkta PLA, PETG, ABS, TPU gibi materyal isimleri geçiyorsa da filament kabul et
-    materials = ["pla", "petg", "abs", "tpu", "asa", "pva", "nylon", "carbon", "pc"]
+    materials = ["pla", "petg", "abs", "tpu", "asa", "pva", "nylon", "carbon", "pc", "hips"]
     for mat in materials:
         if re.search(rf"\b{mat}\b", name_lower):
             return True
@@ -195,7 +185,7 @@ def save_products(items: list[dict]) -> int:
     with db() as conn:
         for p in items:
             name = clean_text(p.get("name"))
-            if not name:
+            if not name or not is_valid_filament(name):
                 continue
                 
             if not p.get("in_stock") or p.get("in_stock") != 1:
@@ -300,76 +290,81 @@ def scrape_shopify(source: dict, headers: dict) -> list[dict]:
 
 def scrape_robitshop(source: dict, headers: dict) -> list[dict]:
     items = []
-    base_cat_url = "https://www.robitshop.com/kategori/filament-1"
-    
-    page = 1
-    max_pages = 25
+    # Robitshop'un BÜTÜN filament kategorileri
+    cat_urls = [
+        "https://www.robitshop.com/kategori/filament-1",
+        "https://www.robitshop.com/kategori/pla-filamentler",
+        "https://www.robitshop.com/kategori/abs-filamentler",
+        "https://www.robitshop.com/kategori/pet-g-filament",
+        "https://www.robitshop.com/kategori/tpu-flex-filament",
+        "https://www.robitshop.com/kategori/ozel-filamentler"
+    ]
 
-    while page <= max_pages:
-        cat_url = f"{base_cat_url}?sayfa={page}" if page > 1 else base_cat_url
-        try:
-            res = requests.get(cat_url, headers=headers, timeout=12)
-            if res.status_code != 200:
-                break
+    for base_cat in cat_urls:
+        page = 1
+        while page <= 10:
+            cat_url = f"{base_cat}?sayfa={page}" if page > 1 else base_cat
+            try:
+                res = requests.get(cat_url, headers=headers, timeout=12)
+                if res.status_code != 200:
+                    break
 
-            soup = BeautifulSoup(res.text, "html.parser")
-            product_elements = soup.find_all("div", class_=re.compile(r"product-item|showcase|ItemOrj", re.I))
+                soup = BeautifulSoup(res.text, "html.parser")
+                product_elements = soup.find_all("div", class_=re.compile(r"product-item|showcase|ItemOrj", re.I))
 
-            if not product_elements:
-                break
+                if not product_elements:
+                    break
 
-            added_in_this_page = 0
+                added_in_this_page = 0
 
-            for elem in product_elements:
-                elem_html = str(elem).lower()
-                if "stokta yok" in elem_html or "tukendi" in elem_html or "tükendi" in elem_html:
-                    continue
-
-                title_elem = elem.find(["a", "div", "span"], class_=re.compile(r"product-title|productName|title", re.I)) or elem.find("a")
-                price_elem = elem.find(["span", "div"], class_=re.compile(r"price|fiyat|discountPrice", re.I))
-                img_elem = elem.find("img")
-
-                if title_elem and price_elem:
-                    name = clean_text(title_elem.get_text(strip=True))
-                    
-                    # Robitshop'a özel esnetilmiş süzgeç
-                    if not is_robitshop_filament(name):
+                for elem in product_elements:
+                    elem_html = str(elem).lower()
+                    if "stokta yok" in elem_html or "tukendi" in elem_html or "tükendi" in elem_html:
                         continue
 
-                    price = price_number(price_elem.get_text(strip=True))
-                    if not price or price <= 0:
-                        continue
+                    title_elem = elem.find(["a", "div", "span"], class_=re.compile(r"product-title|productName|title", re.I)) or elem.find("a")
+                    price_elem = elem.find(["span", "div"], class_=re.compile(r"price|fiyat|discountPrice", re.I))
+                    img_elem = elem.find("img")
 
-                    href = title_elem.get("href") or (elem.find("a").get("href") if elem.find("a") else "")
-                    prod_url = urljoin("https://www.robitshop.com", href) if href else cat_url
+                    if title_elem and price_elem:
+                        name = clean_text(title_elem.get_text(strip=True))
+                        if not is_valid_filament(name):
+                            continue
 
-                    img_src = ""
-                    if img_elem:
-                        img_src = img_elem.get("data-src") or img_elem.get("src") or img_elem.get("data-original") or ""
-                        if img_src and not img_src.startswith("http"):
-                            img_src = urljoin("https://www.robitshop.com", img_src)
+                        price = price_number(price_elem.get_text(strip=True))
+                        if not price or price <= 0:
+                            continue
 
-                    if not any(p["url"] == prod_url for p in items):
-                        items.append({
-                            "source": source["name"],
-                            "external_id": str(hash(prod_url)),
-                            "name": name,
-                            "price": price,
-                            "old_price": None,
-                            "in_stock": 1,
-                            "url": prod_url,
-                            "image": img_src
-                        })
-                        added_in_this_page += 1
+                        href = title_elem.get("href") or (elem.find("a").get("href") if elem.find("a") else "")
+                        prod_url = urljoin("https://www.robitshop.com", href) if href else cat_url
 
-            if added_in_this_page == 0 and page > 1:
+                        img_src = ""
+                        if img_elem:
+                            img_src = img_elem.get("data-src") or img_elem.get("src") or img_elem.get("data-original") or ""
+                            if img_src and not img_src.startswith("http"):
+                                img_src = urljoin("https://www.robitshop.com", img_src)
+
+                        if not any(p["url"] == prod_url for p in items):
+                            items.append({
+                                "source": source["name"],
+                                "external_id": str(hash(prod_url)),
+                                "name": name,
+                                "price": price,
+                                "old_price": None,
+                                "in_stock": 1,
+                                "url": prod_url,
+                                "image": img_src
+                            })
+                            added_in_this_page += 1
+
+                if added_in_this_page == 0 and page > 1:
+                    break
+
+                page += 1
+
+            except Exception as e:
+                print(f"Robitshop Tarama Hatası ({cat_url}): {e}")
                 break
-
-            page += 1
-
-        except Exception as e:
-            print(f"Robitshop Tarama Hatası ({cat_url}): {e}")
-            break
 
     return items
 
