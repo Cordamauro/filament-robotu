@@ -42,27 +42,25 @@ def disable_browser_cache(response):
     return response
 
 
-# ÖZEL RENK MAPPING KURAL MOTORU (PEMBE, MAVİ VE SİMLİ/STAR ÖNCELLENDİ)
+# GÜÇLENDİRİLMİŞ RENK HARİTASI
 COLOR_MAPPING = [
-    # 1. İSTİSNAİ VE ÖZEL BİRLEŞİMLER
+    # 1. ÖZEL İSTİSNALAR
     (r"(?=.*stone)(?=.*mercan)", "Kırmızı"),
 
-    # 2. PEMBE VEYA MAVİ İÇEREN SİMLİ/STAR SERİLERİ KESİN EŞLEŞTİRME
+    # 2. PEMBE & MAVİ KESİN ÖNCELİK
     (r"pembe|pink|magenta|fuchsia|fuşya|fusya", "Pembe"),
     (r"mavi|blue|lacivert|navy|bebek\s*mavisi|bebek\s*mavi|buz|ice|sky|gök|gok|turkuaz|teal|cyan|sapphire|ocean|okyanus|azure|cobalt|kobalt", "Mavi"),
 
-    # 3. DİĞER KESİN RENK KURALLARI
-    (r"\b(beyaz|white|ral\s*9003)\b", "Beyaz"),
-    (r"\b(kahverengi|kahve|tuğla|mocha|brown|chocolate)\b", "Kahverengi"),
-    (r"\b(mor|purple|violet)\b", "Mor"),
-    (r"\b(gümüş|silver)\b", "Gümüş"),
-    (r"\barmy\b", "Army"),
-    (r"\b(bakır|copper)\b", "Bakır"),
-    (r"\b(natural|naturel|şeffaf|seffaf|transparent|clear)\b", "Şeffaf"),
-    (r"\bwood\b", "Wood"),
-    (r"\b(ten|somon|salmon|skin|flesh|latte)\b", "Ten"),
-
-    # 4. YEŞİL VE DİĞER GRUPLAR
+    # 3. TEMEL RENKLER
+    (r"beyaz|white|ral\s*9003", "Beyaz"),
+    (r"kahverengi|kahve|tuğla|mocha|brown|chocolate", "Kahverengi"),
+    (r"mor|purple|violet", "Mor"),
+    (r"gümüş|silver", "Gümüş"),
+    (r"army", "Army"),
+    (r"bakır|copper", "Bakır"),
+    (r"natural|naturel|şeffaf|seffaf|transparent|clear", "Şeffaf"),
+    (r"wood", "Wood"),
+    (r"ten|somon|salmon|skin|flesh|latte", "Ten"),
     (r"su\s*yeşili|su\s*yesili|yeşil|yesil|green|matcha|haki|khaki|olive|zeytin|mint|nane|fıstık|emerald|zümrüt|lime|çim|grass|pistachio|forest|orman", "Yeşil"),
     (r"color\s*shift|renk\s*geçiş|renk\s*gecis|transition|rainbow|dual[- ]?color|tri[- ]?color|co[- ]?ex", "Renk Geçişi"),
     (r"sarı|sari|yellow|limon|lemon|mustard|hardal", "Sarı"),
@@ -70,7 +68,7 @@ COLOR_MAPPING = [
     (r"siyah|black|dark|gece|obsidian|antrasit|anthracite", "Siyah"),
     (r"gri|grey|gray|stone|kil|granit|rock|metal|titanium|titanyum|çelik|celik|steel|füme|fume", "Gri"),
     (r"bordo|burgundy|maroon", "Bordo"),
-    (r"kırmızı|kirmizi|red|crimson|ruby|sakura|somun|mercan|coral|peach|şeftali|seftali|\bal\b", "Kırmızı"),
+    (r"kırmızı|kirmizi|red|crimson|ruby|sakura|somun|mercan|coral|peach|şeftali|seftali", "Kırmızı"),
     (r"altın|altin|gold|bronz|bronze", "Altın"),
     (r"lila|lilac|lavanta|lavender|erik|plum", "Mor"),
     (r"bej|beige", "Bej")
@@ -224,7 +222,11 @@ def scrape_shopify(source: dict, headers: dict) -> list[dict]:
                         continue
 
                     v_title = v.get('title', '')
-                    full_name = f"{title} {v_title if v_title != 'Default Title' else ''}"
+                    # Varyant başlığında renk ismi varsa full_name içine ' - [Varyant]' olarak ekliyoruz
+                    if v_title and v_title != 'Default Title':
+                        full_name = f"{title} {v_title}"
+                    else:
+                        full_name = title
                     
                     if not is_valid_filament(full_name): continue
 
@@ -253,7 +255,7 @@ def scrape_shopify(source: dict, headers: dict) -> list[dict]:
                     if not v_img_src:
                         v_img_src = default_img
 
-                    if v_img_src.startswith("//"):
+                    if v_img_src and v_img_src.startswith("//"):
                         v_img_src = "https:" + v_img_src
                     elif v_img_src and not v_img_src.startswith("http"):
                         v_img_src = base_url + "/" + v_img_src.lstrip("/")
