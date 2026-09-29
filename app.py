@@ -57,12 +57,14 @@ MATERIAL_PATTERNS = [
     ("PC", r"\bPC\b"), ("PLA", r"\bPLA\b")
 ]
 
+# KESİNLİKLE ENGELLENEN PARÇA VE AKSESUAR KELİMELERİ
 EXCLUDE_TERMS = [
+    "cutter", "tube", "replacement", "ptfe", "kesici", "borusu", "bıçak", "makas",
     "nozzle", "hotend", "extruder", "kurutucu", "dryer", "dry box", "vakum", "poşet",
     "reçine", "resin", "3d kalem", "spatula", "sprey", "rulman", "soğutucu", "fan",
     "step motor", "baskı tablası", "peı", "tabla", "sensör", "sensor", "yazıcı", "printer",
     "somun", "vida", "kayış", "kasnak", "fişek", "ısıtıcı", "termistör", "yapıştırıcı",
-    "temizleme filamenti", "temizleyici", "modül", "kart", "sürücü", "coupler"
+    "temizleme", "temizleyici", "modül", "kart", "sürücü", "coupler", "swatch", "numune"
 ]
 
 KNOWN_BRANDS = [
@@ -103,12 +105,16 @@ def price_number(value) -> float | None:
 
 def is_valid_filament(name: str) -> bool:
     name_lower = name.lower()
+    
+    # 1. Kural: Aksesuar/yedek parça kelimelerinden biri geçiyorsa DİREKT ELE
     if any(term in name_lower for term in EXCLUDE_TERMS):
         return False
-    has_material = any(re.search(pat[1], name, re.I) for pat in MATERIAL_PATTERNS)
-    if "filament" in name_lower or has_material:
-        return True
-    return False
+    
+    # 2. Kural: Gerçek makara filament olması için adında "filament" kelimesi geçmeli
+    if "filament" not in name_lower:
+        return False
+        
+    return True
 
 
 def infer(name: str, source: str) -> dict:
@@ -128,7 +134,6 @@ def save_products(items: list[dict]) -> int:
             if not name or not is_valid_filament(name):
                 continue
                 
-            # Sadece stokta olanları kaydet
             if not p.get("in_stock") or p.get("in_stock") != 1:
                 continue
 
@@ -171,7 +176,6 @@ def scrape_shopify(source: dict, headers: dict) -> list[dict]:
                 default_img = images[0].get("src") if images else ""
 
                 for v in p.get("variants", []):
-                    # Stokta yoksa atla
                     if not v.get("available"):
                         continue
 
@@ -235,11 +239,11 @@ def update_all() -> None:
                         items = future.result()
                         count = save_products(items)
                         total_saved += count
-                        print(f"[{s['name']}] -> {count} adet stoklu ürün eklendi.", flush=True)
+                        print(f"[{s['name']}] -> {count} adet tam filament eklendi.", flush=True)
                     except Exception as e:
                         print(f"[{s['name']}] Hata: {e}", flush=True)
 
-            print(f">>> TOPLAM {total_saved} ADET STOKTA OLAN FİLAMENT EKLENDİ <<<", flush=True)
+            print(f">>> TOPLAM {total_saved} ADET SADECE FİLAMENT EKLENDİ <<<", flush=True)
 
         update_state.update(message="Güncellendi", updated_at=datetime.now().strftime("%d.%m.%Y %H:%M"))
     finally:
