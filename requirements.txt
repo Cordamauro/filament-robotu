@@ -1,4 +1,4 @@
-flask
-waitress
+Flask
 requests
 beautifulsoup4
+waitress
