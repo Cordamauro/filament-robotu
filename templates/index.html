@@ -15,7 +15,6 @@
         .price-tag { font-size: 1.3rem; font-weight: bold; color: #198754; }
         .stock-badge { position: absolute; top: 10px; right: 10px; font-size: 0.75rem; z-index: 2; }
         .result-count-bar { font-size: 0.95rem; color: #495057; font-weight: 600; margin-bottom: 1rem; }
-        
         .color-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 5px; border: 1px solid rgba(0,0,0,0.2); vertical-align: middle; }
     </style>
 </head>
@@ -31,7 +30,6 @@
 </div>
 
 <div class="container mb-5">
-    <!-- FİLTRELEME BÖLÜMÜ -->
     <div class="card p-3 mb-3">
         <div class="row g-3">
             <div class="col-md-3">
@@ -68,12 +66,10 @@
         </div>
     </div>
 
-    <!-- BULUNAN ÜRÜN SAYISI -->
     <div class="d-flex justify-content-between align-items-center px-1">
         <div id="resultCount" class="result-count-bar text-muted">Aranıyor...</div>
     </div>
 
-    <!-- ÜRÜN LİSTESİ -->
     <div id="productList" class="row g-4">
         <div class="text-center py-5">
             <div class="spinner-border text-primary" role="status"></div>
@@ -116,17 +112,70 @@ function getColorHex(colorName) {
     if (c.includes('beyaz')) return '#ffffff';
     if (c.includes('sarı')) return '#ffc107';
     if (c.includes('siyah')) return '#212529';
-    if (c.includes('mavi')) return '#0d6efd';
+    if (c.includes('mavi') || c.includes('lacivert')) return '#0d6efd';
     if (c.includes('yeşil')) return '#198754';
     if (c.includes('turuncu')) return '#fd7e14';
     if (c.includes('mor')) return '#6f42c1';
     if (c.includes('pembe')) return '#d63384';
-    if (c.includes('gri')) return '#6c757d';
-    if (c.includes('ten') || c.includes('somun')) return '#f5c6cb';
-    if (c.includes('bej')) return '#f5f5dc';
-    if (c.includes('turkuaz')) return '#20c997';
-    if (c.includes('kahve')) return '#795548';
+    if (c.includes('gri') || c.includes('gümüş')) return '#6c757d';
+    if (c.includes('ten') || c.includes('doğal')) return '#f5c6cb';
+    if (c.includes('altın')) return '#ffd700';
     return '#adb5bd';
+}
+
+// Resim Yüklendiğinde Görselin Ortasındaki Baskın Rengi Analiz Eden Fonksiyon
+function inspectImageColor(img, productId) {
+    try {
+        const badgeElem = document.getElementById(`color-text-${productId}`);
+        const dotElem = document.getElementById(`color-dot-${productId}`);
+        
+        if (!badgeElem || badgeElem.innerText.trim() !== "Belirtilmemiş") return;
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = img.naturalWidth || img.width;
+        canvas.height = img.naturalHeight || img.height;
+        ctx.drawImage(img, 0, 0);
+
+        // Fotoğrafın tam merkezindeki 20x20 alandan renk ortalaması al
+        const startX = Math.floor(canvas.width * 0.4);
+        const startY = Math.floor(canvas.height * 0.4);
+        const imgData = ctx.getImageData(startX, startY, 20, 20).data;
+
+        let r = 0, g = 0, b = 0, count = 0;
+        for (let i = 0; i < imgData.length; i += 4) {
+            if(imgData[i+3] > 200) { // Şeffaf olmayan pikseller
+                r += imgData[i];
+                g += imgData[i+1];
+                b += imgData[i+2];
+                count++;
+            }
+        }
+
+        if (count > 0) {
+            r = Math.floor(r / count);
+            g = Math.floor(g / count);
+            b = Math.floor(b / count);
+
+            let detectedColor = "Görsel Tonda";
+            let hex = `rgb(${r},${g},${b})`;
+
+            // RGB Renk Matrisi
+            if (r > 200 && g > 200 && b > 200) detectedColor = "Beyaz";
+            else if (r < 50 && g < 50 && b < 50) detectedColor = "Siyah";
+            else if (r > g + 40 && r > b + 40) detectedColor = "Kırmızı";
+            else if (g > r + 30 && g > b + 30) detectedColor = "Yeşil";
+            else if (b > r + 30 && b > g + 30) detectedColor = "Mavi";
+            else if (r > 180 && g > 150 && b < 100) detectedColor = "Sarı";
+            else if (r > 180 && g > 90 && b < 80) detectedColor = "Turuncu";
+            else if (r > 120 && b > 120 && g < 100) detectedColor = "Mor";
+
+            badgeElem.innerText = detectedColor;
+            dotElem.style.backgroundColor = hex;
+        }
+    } catch (e) {
+        // Cross-Origin kısıtlamasında varsayılana düş
+    }
 }
 
 async function loadProducts() {
@@ -153,14 +202,14 @@ async function loadProducts() {
     list.innerHTML = products.map(p => {
         const fallbackImg = "https://via.placeholder.com/300x300?text=3D+Filament";
         const imgSrc = p.image && p.image.trim() !== "" ? p.image : fallbackImg;
-        const colorHex = getColorHex(p.color || p.name);
+        const colorHex = getColorHex(p.color);
 
         return `
         <div class="col-sm-6 col-md-4 col-lg-3">
             <div class="card h-100">
                 <div class="product-img-container">
                     <span class="badge bg-success stock-badge">✓ Stokta Var</span>
-                    <img src="${imgSrc}" class="product-img" alt="${p.name}" onerror="this.onerror=null;this.src='${fallbackImg}';">
+                    <img src="${imgSrc}" class="product-img" alt="${p.name}" crossorigin="anonymous" onload="inspectImageColor(this, '${p.id}')" onerror="this.onerror=null;this.src='${fallbackImg}';">
                 </div>
                 <div class="card-body d-flex flex-column p-3">
                     <span class="badge bg-secondary mb-2 align-self-start">${p.source}</span>
@@ -168,8 +217,8 @@ async function loadProducts() {
                     <div class="mb-3 d-flex align-items-center gap-1">
                         <span class="badge bg-primary">${p.material}</span>
                         <span class="badge bg-light text-dark border d-flex align-items-center">
-                            <span class="color-dot" style="background-color: ${colorHex};"></span>
-                            ${p.color}
+                            <span id="color-dot-${p.id}" class="color-dot" style="background-color: ${colorHex};"></span>
+                            <span id="color-text-${p.id}">${p.color}</span>
                         </span>
                     </div>
                     <div class="mt-auto pt-2 border-top d-flex justify-content-between align-items-center">
