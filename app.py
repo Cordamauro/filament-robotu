@@ -152,6 +152,21 @@ def is_valid_filament(name: str) -> bool:
     return True
 
 
+def is_robitshop_filament(name: str) -> bool:
+    """Robitshop başlıklarında 'filament' kelimesi geçmeyebileceği için materyal adı kontrolü yapar."""
+    name_lower = name.lower()
+    if any(term in name_lower for term in EXCLUDE_TERMS):
+        return False
+    if "filament" in name_lower:
+        return True
+    # Başlıkta PLA, PETG, ABS, TPU gibi materyal isimleri geçiyorsa da filament kabul et
+    materials = ["pla", "petg", "abs", "tpu", "asa", "pva", "nylon", "carbon", "pc"]
+    for mat in materials:
+        if re.search(rf"\b{mat}\b", name_lower):
+            return True
+    return False
+
+
 def detect_color(text: str) -> str | None:
     text_lower = text.lower()
     for pattern, normalized_color in COLOR_MAPPING:
@@ -180,7 +195,7 @@ def save_products(items: list[dict]) -> int:
     with db() as conn:
         for p in items:
             name = clean_text(p.get("name"))
-            if not name or not is_valid_filament(name):
+            if not name:
                 continue
                 
             if not p.get("in_stock") or p.get("in_stock") != 1:
@@ -288,7 +303,7 @@ def scrape_robitshop(source: dict, headers: dict) -> list[dict]:
     base_cat_url = "https://www.robitshop.com/kategori/filament-1"
     
     page = 1
-    max_pages = 20
+    max_pages = 25
 
     while page <= max_pages:
         cat_url = f"{base_cat_url}?sayfa={page}" if page > 1 else base_cat_url
@@ -316,7 +331,9 @@ def scrape_robitshop(source: dict, headers: dict) -> list[dict]:
 
                 if title_elem and price_elem:
                     name = clean_text(title_elem.get_text(strip=True))
-                    if not is_valid_filament(name):
+                    
+                    # Robitshop'a özel esnetilmiş süzgeç
+                    if not is_robitshop_filament(name):
                         continue
 
                     price = price_number(price_elem.get_text(strip=True))
