@@ -147,7 +147,6 @@ def is_valid_filament(name: str) -> bool:
     name_lower = name.lower()
     if any(term in name_lower for term in EXCLUDE_TERMS):
         return False
-    # Başlıkta filament kelimesi veya filament materyali adı varsa geçerli kabul et
     if "filament" in name_lower:
         return True
     materials = ["pla", "petg", "abs", "tpu", "asa", "pva", "nylon", "carbon", "pc", "hips"]
@@ -290,22 +289,26 @@ def scrape_shopify(source: dict, headers: dict) -> list[dict]:
 
 def scrape_robitshop(source: dict, headers: dict) -> list[dict]:
     items = []
-    # Robitshop'un BÜTÜN filament kategorileri
-    cat_urls = [
+    targets = [
         "https://www.robitshop.com/kategori/filament-1",
         "https://www.robitshop.com/kategori/pla-filamentler",
-        "https://www.robitshop.com/kategori/abs-filamentler",
         "https://www.robitshop.com/kategori/pet-g-filament",
+        "https://www.robitshop.com/kategori/abs-filamentler",
         "https://www.robitshop.com/kategori/tpu-flex-filament",
-        "https://www.robitshop.com/kategori/ozel-filamentler"
+        "https://www.robitshop.com/esun",
+        "https://www.robitshop.com/creality"
     ]
 
-    for base_cat in cat_urls:
-        page = 1
-        while page <= 10:
-            cat_url = f"{base_cat}?sayfa={page}" if page > 1 else base_cat
+    for base_url in targets:
+        for page in range(1, 10):
+            if page == 1:
+                target_url = base_url
+            else:
+                sep = "&" if "?" in base_url else "?"
+                target_url = f"{base_url}{sep}s={page}"
+
             try:
-                res = requests.get(cat_url, headers=headers, timeout=12)
+                res = requests.get(target_url, headers=headers, timeout=12)
                 if res.status_code != 200:
                     break
 
@@ -315,8 +318,7 @@ def scrape_robitshop(source: dict, headers: dict) -> list[dict]:
                 if not product_elements:
                     break
 
-                added_in_this_page = 0
-
+                added_in_page = 0
                 for elem in product_elements:
                     elem_html = str(elem).lower()
                     if "stokta yok" in elem_html or "tukendi" in elem_html or "tükendi" in elem_html:
@@ -336,7 +338,7 @@ def scrape_robitshop(source: dict, headers: dict) -> list[dict]:
                             continue
 
                         href = title_elem.get("href") or (elem.find("a").get("href") if elem.find("a") else "")
-                        prod_url = urljoin("https://www.robitshop.com", href) if href else cat_url
+                        prod_url = urljoin("https://www.robitshop.com", href) if href else target_url
 
                         img_src = ""
                         if img_elem:
@@ -355,15 +357,13 @@ def scrape_robitshop(source: dict, headers: dict) -> list[dict]:
                                 "url": prod_url,
                                 "image": img_src
                             })
-                            added_in_this_page += 1
+                            added_in_page += 1
 
-                if added_in_this_page == 0 and page > 1:
+                if added_in_page == 0 and page > 1:
                     break
 
-                page += 1
-
             except Exception as e:
-                print(f"Robitshop Tarama Hatası ({cat_url}): {e}")
+                print(f"Robitshop Tarama Hatası ({target_url}): {e}")
                 break
 
     return items
