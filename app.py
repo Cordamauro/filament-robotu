@@ -42,6 +42,12 @@ def disable_browser_cache(response):
     return response
 
 
+# Renk Geçişi Tanımlayıcı Kalıplar
+COLOR_SHIFT_PATTERNS = re.compile(
+    r"color\s*shift|renk\s*geçiş|renk\s*gecis|transition|rainbow|co[- ]?extrusion|multi[- ]?color|dual[- ]?color|tri[- ]?color|chameleon|bukalemun", 
+    re.I
+)
+
 COLOR_WORDS = [
     "siyah", "beyaz", "kırmızı", "mavi", "yeşil", "sarı", "turuncu", "mor", "pembe", 
     "gri", "gümüş", "altın", "kahve", "bej", "mint", "turkuaz", "lila", "şeffaf", 
@@ -49,7 +55,6 @@ COLOR_WORDS = [
     "ten", "somun", "somon", "sakura", "gold", "silver", "yellow", "white", "black", "red", "blue", "green"
 ]
 
-# Türkçe Karakter Dönüştürücü (Resim URL'lerinde Türkçe karakter eşleştirme için)
 COLOR_ALIASES = {
     "sarı": ["sari", "yellow"],
     "kırmızı": ["kirmizi", "red"],
@@ -129,7 +134,13 @@ def is_valid_filament(name: str) -> bool:
 def infer(name: str, source: str) -> dict:
     upper = name.upper()
     material = next((label for label, pattern in MATERIAL_PATTERNS if re.search(pattern, upper, re.I)), "PLA")
-    color = next((c.title() for c in COLOR_WORDS if c in name.casefold()), "Belirtilmemiş")
+    
+    # Renk Geçişi Kontrolü (Öncelikli Kural)
+    if COLOR_SHIFT_PATTERNS.search(name):
+        color = "Renk Geçişi"
+    else:
+        color = next((c.title() for c in COLOR_WORDS if c in name.casefold()), "Belirtilmemiş")
+        
     brand = next((b for b in KNOWN_BRANDS if b.casefold() in name.casefold()), source)
     return {"brand": brand, "material": material, "color": color, "weight_g": 1000}
 
@@ -193,26 +204,20 @@ def scrape_shopify(source: dict, headers: dict) -> list[dict]:
                     
                     if not is_valid_filament(full_name): continue
 
-                    # Akıllı Görsel Bulucu (3 Kademeli)
                     v_img_src = None
-                    
-                    # 1. Kademeli arama: Direct Variant Image
                     v_img_id = v.get("image_id")
                     if v_img_id:
                         v_img_src = img_map.get(v_img_id)
 
-                    # Featured Image kontrolü
                     if not v_img_src and v.get("featured_image"):
                         v_img_src = v.get("featured_image", {}).get("src")
 
-                    # 2. Kademeli arama: Resim URL'lerinde ve Alt metinlerde Renk Adı Arama
                     if not v_img_src and len(images) > 1:
                         v_title_lower = v_title.lower()
                         for img in images:
                             src_lower = (img.get("src") or "").lower()
                             alt_lower = (img.get("alt") or "").lower()
                             
-                            # Varyanttaki tüm renk kelimelerini tara
                             for color_key, aliases in COLOR_ALIASES.items():
                                 if color_key in v_title_lower:
                                     for alias in aliases:
@@ -221,7 +226,6 @@ def scrape_shopify(source: dict, headers: dict) -> list[dict]:
                                             break
                                 if v_img_src: break
 
-                    # Hiçbiri eşleşmediyse varsayılana düş
                     if not v_img_src:
                         v_img_src = default_img
 
