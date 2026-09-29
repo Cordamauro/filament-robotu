@@ -43,12 +43,13 @@ def disable_browser_cache(response):
 
 
 COLOR_MAPPING = [
-    # 1. ÖZEL İSTİSNALAR
+    # 1. ÖZEL İSTİSNALAR VE PORİMA PLA STAR MAVİ BİREBİR KURALI
+    (r"(?=.*pla\s*star)(?=.*mavi|blue|lacivert)", "Mavi"),
     (r"(?=.*stone)(?=.*mercan)", "Kırmızı"),
 
-    # 2. PEMBE & MAVİ KESİN ÖNCELİK
-    (r"pembe|pink|magenta|fuchsia|fuşya|fusya", "Pembe"),
+    # 2. MAVİ VE PEMBE ÖNCELİKLİ EŞLEŞTİRME
     (r"mavi|blue|lacivert|navy|bebek\s*mavisi|bebek\s*mavi|buz|ice|sky|gök|gok|turkuaz|teal|cyan|sapphire|ocean|okyanus|azure|cobalt|kobalt", "Mavi"),
+    (r"pembe|pink|magenta|fuchsia|fuşya|fusya", "Pembe"),
 
     # 3. TEMEL RENKLER
     (r"beyaz|white|ral\s*9003", "Beyaz"),
@@ -151,7 +152,6 @@ def is_valid_filament(name: str) -> bool:
 
 
 def detect_color(text: str) -> str:
-    """Metin veya Görsel URL'sinden Renk Tespiti Yapar."""
     text_lower = text.lower()
     for pattern, normalized_color in COLOR_MAPPING:
         if re.search(pattern, text_lower, re.I):
@@ -159,16 +159,22 @@ def detect_color(text: str) -> str:
     return "Diğer / Özel Renk"
 
 
-def infer(name: str, source: str, image_url: str = "") -> dict:
+def infer(name: str, source: str, image_url: str = "", url: str = "") -> dict:
     upper = name.upper()
     material = next((label for label, pattern in MATERIAL_PATTERNS if re.search(pattern, upper, re.I)), "PLA")
     
-    # 1. Önce İsmi Tara
+    # 1. İsmi tara
     color = detect_color(name)
     
-    # 2. İsimde Renk Bulunamazsa ("Diğer / Özel Renk" düşerse) Görsel URL'sindeki İsmi Tara (Simli/Star Tespiti)
-    if color == "Diğer / Özel Renk" and image_url:
-        color = detect_color(image_url)
+    # 2. İsimde bulunamadıysa URL ve görsel URL'sini tara
+    if color == "Diğer / Özel Renk":
+        combined_meta = f"{image_url} {url}"
+        color = detect_color(combined_meta)
+
+    # 3. Özel Istisna: Porima PLA Star Mavi/Görsel Takılması
+    if "porima pla star" in name.lower() and color == "Diğer / Özel Renk":
+        if "mavi" in (image_url + url).lower() or "blue" in (image_url + url).lower():
+            color = "Mavi"
 
     brand = next((b for b in KNOWN_BRANDS if b.casefold() in name.casefold()), source)
     return {"brand": brand, "material": material, "color": color, "weight_g": 1000}
@@ -191,14 +197,15 @@ def save_products(items: list[dict]) -> int:
                 continue
 
             image_url = p.get("image", "")
-            meta = infer(name, p.get("source", ""), image_url)
+            product_url = p.get("url", "")
+            meta = infer(name, p.get("source", ""), image_url, product_url)
             
             try:
                 conn.execute("""INSERT INTO products(source, external_id, name, brand, material, color, weight_g, price, old_price, in_stock, url, image, updated_at)
                   VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                   ON CONFLICT(source, url) DO UPDATE SET 
                   price=excluded.price, in_stock=excluded.in_stock, color=excluded.color, image=excluded.image, updated_at=excluded.updated_at""", 
-                  (p.get("source"), str(p.get("external_id", "")), name, meta["brand"], meta["material"], meta["color"], meta["weight_g"], price, p.get("old_price"), 1, p.get("url"), image_url, now))
+                  (p.get("source"), str(p.get("external_id", "")), name, meta["brand"], meta["material"], meta["color"], meta["weight_g"], price, p.get("old_price"), 1, product_url, image_url, now))
                 saved += 1
             except Exception:
                 pass
