@@ -99,12 +99,10 @@ MATERIAL_PATTERNS = [
 ]
 
 EXCLUDE_TERMS = [
-    "hub", "splitter", "buffer", "feeder", "cutter", "tube", "replacement", "ptfe", "kesici", "borusu", "bıçak", "makas",
     "nozzle", "hotend", "extruder", "kurutucu", "dryer", "dry box", "vakum", "poşet",
     "reçine", "resin", "3d kalem", "spatula", "sprey", "rulman", "soğutucu", "fan",
-    "step motor", "baskı tablası", "peı", "tabla", "sensör", "sensor", "yazıcı", "printer",
-    "somun", "vida", "kayış", "kasnak", "fişek", "ısıtıcı", "termistör", "yapıştırıcı",
-    "temizleme", "temizleyici", "modül", "kart", "sürücü", "coupler", "swatch", "numune"
+    "step motor", "baskı tablası", "peı", "tabla", "sensör", "yazıcı", "printer",
+    "somun", "vida", "kayış", "kasnak", "fişek", "ısıtıcı", "termistör", "yapıştırıcı"
 ]
 
 KNOWN_BRANDS = [
@@ -147,9 +145,13 @@ def is_valid_filament(name: str) -> bool:
     name_lower = name.lower()
     if any(term in name_lower for term in EXCLUDE_TERMS):
         return False
-    if "filament" not in name_lower and not any(m[0].lower() in name_lower for m in MATERIAL_PATTERNS):
-        return False
-    return True
+    # Basitleştirilmiş filtre: "filament" lafı geçiyorsa VEYA PLA/PETG vb. varsa kabul eder
+    if "filament" in name_lower or "filaman" in name_lower:
+        return True
+    for _, pattern in MATERIAL_PATTERNS:
+        if re.search(pattern, name, re.I):
+            return True
+    return False
 
 
 def detect_color(text: str) -> str | None:
@@ -207,12 +209,14 @@ def scrape_shopify(source: dict, headers: dict) -> list[dict]:
     items = []
     page = 1
     
-    # URL'den domain adresi elde edilir
     raw_url = source["url"]
     base_url = raw_url.split("/products.json")[0].split("/collections")[0].rstrip("/")
     
-    # Tam json adresi belirlenir (Porima için doğrudan belirtilen URL kullanılır)
-    json_endpoint = raw_url if "products.json" in raw_url else f"{base_url}/products.json"
+    # Doğrudan girilen Shopify URL'sini kullanır
+    if "products.json" in raw_url:
+        json_endpoint = raw_url
+    else:
+        json_endpoint = f"{base_url}/products.json"
 
     while page <= 10:
         sep = "&" if "?" in json_endpoint else "?"
@@ -291,7 +295,7 @@ def scrape_shopify(source: dict, headers: dict) -> list[dict]:
 def scrape_source(source: dict) -> list[dict]:
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept': 'application/json, text/plain, */*',
         'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7'
     }
     return scrape_shopify(source, headers)
