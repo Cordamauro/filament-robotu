@@ -40,35 +40,6 @@
             max-height: 100vh;
         }
 
-        .sidebar-brand {
-            font-size: 1.05rem;
-            font-weight: 800;
-            color: #ffffff;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 6px;
-            padding-bottom: 0.6rem;
-            border-bottom: 1px solid #282828;
-            margin-bottom: 0.2rem;
-        }
-
-        .sidebar-brand span {
-            color: #ff9900;
-        }
-
-        .clear-all-link {
-            font-size: 0.7rem;
-            color: #ff9900;
-            text-decoration: none;
-            font-weight: 600;
-            cursor: pointer;
-        }
-
-        .clear-all-link:hover {
-            text-decoration: underline;
-        }
-
         /* AKORDEON ELEMANLARI (GÖRSEL FORMATI) */
         .accordion-item-custom {
             border-bottom: 1px solid #222222;
@@ -387,13 +358,8 @@
 <body>
 
 <div class="app-container">
-    <!-- GÖRSELDEKİ BİREBİR SOL SIDEBAR -->
+    <!-- GÖRSELDEKİ BİREBİR SOL SIDEBAR (BAŞLIKSIZ) -->
     <aside class="sidebar">
-        <div class="sidebar-brand">
-            <div>🧵 Filament<span>Robotu</span></div>
-            <a class="clear-all-link" onclick="clearAllFilters()">Clear all</a>
-        </div>
-
         <!-- MATERYAL -->
         <div class="accordion-item-custom">
             <div class="accordion-header-custom" onclick="toggleAccordion(this)">
