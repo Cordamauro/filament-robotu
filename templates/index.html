@@ -40,7 +40,7 @@
             max-height: 100vh;
         }
 
-        /* AKORDEON ELEMANLARI (GÖRSEL FORMATI) */
+        /* AKORDEON ELEMANLARI */
         .accordion-item-custom {
             border-bottom: 1px solid #222222;
             padding-bottom: 0.4rem;
@@ -85,7 +85,7 @@
             display: flex;
         }
 
-        /* GÖRSELDEKİ BİREBİR SEÇENEK BUTONLARI (PILLS) */
+        /* SEÇENEK BUTONLARI (PILLS) */
         .filter-btn-pill {
             background-color: #222222;
             border: 1px solid #2d2d2d;
@@ -205,7 +205,7 @@
             font-weight: 700;
         }
 
-        /* GÖRSELDEKİ BİREBİR KOMPAKT 8 KOLONLU GRID */
+        /* GRID ÜRÜN KARTLARI */
         .products-grid {
             padding: 0.8rem;
             display: grid;
@@ -237,6 +237,7 @@
             width: 100%;
         }
 
+        /* TIKLANABİLİR GÖRSEL ALANI */
         .card-img-wrap {
             height: 105px;
             background: #fafafa;
@@ -245,12 +246,19 @@
             align-items: center;
             justify-content: center;
             border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
+            text-decoration: none;
         }
 
         .card-img-wrap img {
             max-height: 100%;
             max-width: 100%;
             object-fit: contain;
+            transition: transform 0.15s ease;
+        }
+
+        .card-img-wrap:hover img {
+            transform: scale(1.05);
         }
 
         .card-body-custom {
@@ -358,12 +366,12 @@
 <body>
 
 <div class="app-container">
-    <!-- GÖRSELDEKİ BİREBİR SOL SIDEBAR (BAŞLIKSIZ) -->
+    <!-- TÜRKÇELEŞTİRİLMİŞ SOL SIDEBAR -->
     <aside class="sidebar">
         <!-- MATERYAL -->
         <div class="accordion-item-custom">
             <div class="accordion-header-custom" onclick="toggleAccordion(this)">
-                <span>MATERIAL</span>
+                <span>MATERYAL</span>
                 <span class="accordion-icon">+</span>
             </div>
             <div id="listMaterial" class="accordion-content"></div>
@@ -372,7 +380,7 @@
         <!-- MARKA -->
         <div class="accordion-item-custom">
             <div class="accordion-header-custom" onclick="toggleAccordion(this)">
-                <span>BRAND</span>
+                <span>MARKA</span>
                 <span class="accordion-icon">+</span>
             </div>
             <div id="listBrand" class="accordion-content"></div>
@@ -381,7 +389,7 @@
         <!-- RENK -->
         <div class="accordion-item-custom">
             <div class="accordion-header-custom" onclick="toggleAccordion(this)">
-                <span>COLOR</span>
+                <span>RENK</span>
                 <span class="accordion-icon">+</span>
             </div>
             <div id="listColor" class="accordion-content"></div>
@@ -390,7 +398,7 @@
         <!-- MAĞAZA -->
         <div class="accordion-item-custom">
             <div class="accordion-header-custom" onclick="toggleAccordion(this)">
-                <span>STORE</span>
+                <span>MAĞAZA</span>
                 <span class="accordion-icon">+</span>
             </div>
             <div id="listSource" class="accordion-content"></div>
@@ -529,9 +537,12 @@ async function loadProducts() {
         return `
         <div class="filament-card">
             <div class="card-color-strip" style="background-color: ${stripColor};"></div>
-            <div class="card-img-wrap">
+            
+            <!-- TIKLANABİLİR GÖRSEL ALANI -->
+            <a href="${p.url}" target="_blank" class="card-img-wrap" title="${p.name} - Mağazaya Git">
                 <img src="${imgSrc}" alt="${p.name}" onerror="this.onerror=null;this.src='${fallbackImg}';">
-            </div>
+            </a>
+
             <div class="card-body-custom">
                 <div class="brand-badge">${p.brand || p.source}</div>
                 <div class="product-title-custom" title="${p.name}">${p.name}</div>
