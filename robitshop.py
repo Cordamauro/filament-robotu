@@ -103,14 +103,20 @@ def parse_price(text: str) -> float | None:
 
 def is_robitshop_filament(name: str) -> bool:
     name_lower = name.lower()
+    
+    # 1. Yasaklı kelimelerden biri varsa DIREKT ELE (tutucu, model, aparat vs.)
     if any(term in name_lower for term in EXCLUDE_TERMS):
         return False
+        
+    # 2. İçinde filament geçiyorsa veya belirli materyal ölçüsü/tipi barındırıyorsa al
     if "filament" in name_lower:
         return True
-    materials = ["pla", "petg", "abs", "tpu", "asa", "pva", "nylon", "carbon", "pc", "hips", "basic"]
+        
+    materials = ["pla", "petg", "abs", "tpu", "asa", "pva", "nylon", "carbon", "pc", "hips"]
     for mat in materials:
         if re.search(rf"\b{mat}\b", name_lower):
             return True
+            
     return False
 
 def infer(name: str) -> dict:
