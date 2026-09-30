@@ -26,7 +26,7 @@
             min-height: 100vh;
         }
 
-        /* GÖRSELDEKİ BİREBİR SOL DAR SIDEBAR (210px) */
+        /* SOL SIDEBAR (210px) */
         .sidebar {
             width: 210px;
             background-color: #171717;
@@ -44,15 +44,16 @@
         .sidebar-brand {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
             padding-bottom: 0.6rem;
             border-bottom: 1px solid #282828;
             margin-bottom: 0.2rem;
         }
 
+        /* BÜYÜTÜLMÜŞ LOGO KAPSAYICISI (36px) */
         .owl-logo-circle {
-            width: 28px;
-            height: 28px;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
             background-color: #e8d8c8;
             display: flex;
@@ -62,7 +63,7 @@
         }
 
         .brand-text {
-            font-size: 0.95rem;
+            font-size: 1rem;
             font-weight: 800;
             color: #ffffff;
             letter-spacing: -0.3px;
@@ -237,16 +238,15 @@
             font-weight: 700;
         }
 
-        /* GRID ÜRÜN KARTLARI */
+        /* GRID ÜRÜN KARTLARI (TEK SATIRDA 8 KART) */
         .products-grid {
             padding: 0.8rem;
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
-            gap: 0.6rem;
+            grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+            gap: 0.8rem;
             overflow-y: auto;
         }
 
-        /* BEYAZ MİNİMALİST KARTLAR */
         .filament-card {
             background: #ffffff;
             border-radius: 6px;
@@ -270,9 +270,9 @@
         }
 
         .card-img-wrap {
-            height: 105px;
+            height: 135px;
             background: #fafafa;
-            padding: 6px;
+            padding: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -293,46 +293,46 @@
         }
 
         .card-body-custom {
-            padding: 8px;
+            padding: 10px;
             display: flex;
             flex-direction: column;
             flex-grow: 1;
         }
 
         .brand-badge {
-            font-size: 0.6rem;
+            font-size: 0.65rem;
             font-weight: 700;
             color: #888888;
             text-transform: uppercase;
             letter-spacing: 0.4px;
-            margin-bottom: 2px;
+            margin-bottom: 3px;
         }
 
         .product-title-custom {
-            font-size: 0.75rem;
+            font-size: 0.8rem;
             font-weight: 600;
             color: #111111;
-            line-height: 1.15;
-            height: 2.3em;
+            line-height: 1.2;
+            height: 2.4em;
             overflow: hidden;
             display: -webkit-box;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
-            margin-bottom: 4px;
+            margin-bottom: 6px;
         }
 
         .tags-row {
             display: flex;
-            gap: 3px;
-            margin-bottom: 6px;
+            gap: 4px;
+            margin-bottom: 8px;
             flex-wrap: wrap;
         }
 
         .tag-pill {
-            font-size: 0.6rem;
+            font-size: 0.65rem;
             font-weight: 600;
-            padding: 1px 5px;
-            border-radius: 3px;
+            padding: 2px 6px;
+            border-radius: 4px;
             background: #f2f2f2;
             color: #555555;
             border: 1px solid #e2e2e2;
@@ -340,7 +340,7 @@
 
         .price-section {
             margin-top: auto;
-            padding-top: 4px;
+            padding-top: 6px;
             border-top: 1px solid #f4f4f4;
             display: flex;
             align-items: baseline;
@@ -348,13 +348,13 @@
         }
 
         .price-main {
-            font-size: 0.95rem;
+            font-size: 1rem;
             font-weight: 800;
             color: #111111;
         }
 
         .price-sub {
-            font-size: 0.65rem;
+            font-size: 0.7rem;
             color: #777777;
             font-weight: 600;
         }
@@ -362,11 +362,11 @@
         .btn-buy-orange {
             background-color: #ff9900;
             color: #ffffff;
-            font-size: 0.7rem;
+            font-size: 0.75rem;
             font-weight: 700;
             text-align: center;
             text-decoration: none;
-            padding: 5px;
+            padding: 6px;
             border-radius: 4px;
             margin-top: 6px;
             display: block;
@@ -397,11 +397,12 @@
 <body>
 
 <div class="app-container">
-    <!-- SOL SIDEBAR (YUVARLAK BAYKUŞ LOGOLU VE BAŞLIKLI) -->
+    <!-- SOL SIDEBAR -->
     <aside class="sidebar">
         <div class="sidebar-brand">
             <div class="owl-logo-circle">
-                <svg width="20" height="20" viewBox="0 0 100 100" fill="none">
+                <!-- BÜYÜTÜLMÜŞ SVG BAYKUŞ İKONU (26px) -->
+                <svg width="26" height="26" viewBox="0 0 100 100" fill="none">
                     <path d="M50 18C40 18 30 22 28 28C28 38 35 48 50 48C65 48 72 38 72 28C70 22 60 18 50 18Z" fill="#3e2312"/>
                     <circle cx="38" cy="38" r="10" fill="#3e2312"/>
                     <circle cx="62" cy="38" r="10" fill="#3e2312"/>
@@ -578,7 +579,7 @@ async function loadProducts() {
     }
 
     list.innerHTML = products.map(p => {
-        const fallbackImg = "https://via.placeholder.com/150x150?text=3D+Filament";
+        const fallbackImg = "https://via.placeholder.com/200x200?text=3D+Filament";
         const imgSrc = p.image && p.image.trim() !== "" ? p.image : fallbackImg;
         const stripColor = getColorHex(p.color);
 
