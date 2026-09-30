@@ -21,6 +21,22 @@
             font-size: 13px;
         }
 
+        /* ÖZEL KOYU İNCE SCROLLBAR (KABA BEYAZ ÇUBUĞU BİTİRİR) */
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #171717;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #333333;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #ff9900;
+        }
+
         .app-container {
             display: flex;
             min-height: 100vh;
@@ -50,7 +66,6 @@
             margin-bottom: 0.2rem;
         }
 
-        /* BÜYÜTÜLMÜŞ LOGO KAPSAYICISI (36px) */
         .owl-logo-circle {
             width: 36px;
             height: 36px;
@@ -107,9 +122,10 @@
         .accordion-content {
             display: none;
             flex-direction: column;
-            gap: 4px;
-            margin-top: 0.3rem;
+            gap: 5px;
+            margin-top: 0.4rem;
             padding-bottom: 0.2rem;
+            padding-right: 4px;
             max-height: 220px;
             overflow-y: auto;
         }
@@ -118,14 +134,15 @@
             display: flex;
         }
 
-        /* SEÇENEK BUTONLARI (PILLS) */
+        /* DÜZELTİLMİŞ FİLTRE BUTONLARI (KESİLME YAPMAZ) */
         .filter-btn-pill {
             background-color: #222222;
             border: 1px solid #2d2d2d;
-            color: #b5b5b5;
-            font-size: 0.72rem;
+            color: #cccccc;
+            font-size: 0.75rem;
             font-weight: 500;
-            padding: 0.32rem 0.6rem;
+            padding: 0.45rem 0.7rem;
+            min-height: 32px;
             border-radius: 6px;
             text-align: left;
             cursor: pointer;
@@ -133,6 +150,9 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            display: flex;
+            align-items: center;
+            line-height: 1;
         }
 
         .filter-btn-pill:hover {
@@ -401,7 +421,6 @@
     <aside class="sidebar">
         <div class="sidebar-brand">
             <div class="owl-logo-circle">
-                <!-- BÜYÜTÜLMÜŞ SVG BAYKUŞ İKONU (26px) -->
                 <svg width="26" height="26" viewBox="0 0 100 100" fill="none">
                     <path d="M50 18C40 18 30 22 28 28C28 38 35 48 50 48C65 48 72 38 72 28C70 22 60 18 50 18Z" fill="#3e2312"/>
                     <circle cx="38" cy="38" r="10" fill="#3e2312"/>
