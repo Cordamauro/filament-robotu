@@ -61,18 +61,18 @@
             margin-bottom: 1.8rem;
         }
 
-        /* DENGELİ İKİ SATIRLI RENK PALETİ KAPSAYICISI */
+        /* TAM RENK TOPLARINA GÖRE SIKIŞAN İÇ KUTU */
         .spool-bar {
-            display: flex;
+            display: inline-flex;
             flex-direction: column;
             align-items: center;
             gap: 10px;
-            max-width: 900px;
+            width: fit-content;
             margin-left: auto;
             margin-right: auto;
             background-color: rgba(0, 0, 0, 0.55);
             backdrop-filter: blur(6px);
-            padding: 12px 20px;
+            padding: 12px 18px;
             border-radius: 24px;
             border: 1px solid rgba(255, 255, 255, 0.2);
             box-shadow: 0 4px 15px rgba(0,0,0,0.3);
@@ -83,7 +83,7 @@
             justify-content: center;
             align-items: center;
             gap: 12px;
-            width: 100%;
+            width: auto;
         }
 
         .spool-dot {
@@ -94,6 +94,7 @@
             box-shadow: 0 3px 6px rgba(0,0,0,0.5);
             transition: all 0.2s ease;
             cursor: pointer;
+            flex-shrink: 0;
         }
 
         .spool-dot:hover { 
@@ -200,7 +201,7 @@
 <body>
 
 <div class="hero-banner mb-4">
-    <div class="container">
+    <div class="container text-center">
         <div>
             <h1 class="hero-title">3D Filament Arama Motoru</h1>
         </div>
@@ -208,8 +209,10 @@
             <p class="hero-subtitle">En Uygun Fiyatlı Filamentleri Anında Karşılaştırın</p>
         </div>
         
-        <!-- DİNAMİK DENGELİ RENK TOPLARI -->
-        <div id="spoolBar" class="spool-bar"></div>
+        <!-- TAM BOYUTTA ORTALANAN VE SIKIŞAN RENK ALANI -->
+        <div class="d-flex justify-content-center">
+            <div id="spoolBar" class="spool-bar"></div>
+        </div>
     </div>
 </div>
 
