@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import re
 import sqlite3
-import requests
 from pathlib import Path
 from urllib.parse import urljoin
 from datetime import datetime
 from bs4 import BeautifulSoup
+from curl_cffi import requests
 
 def data_dir() -> Path:
     root = Path(__file__).resolve().parent / "data"
@@ -14,12 +14,6 @@ def data_dir() -> Path:
     return root
 
 DB_PATH = data_dir() / "filaments_v9.db"
-
-HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-    'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7'
-}
 
 USD_RATE = 35.0
 
@@ -115,10 +109,10 @@ def infer(name: str) -> dict:
 
 def scrape_robitshop() -> list[dict]:
     items = []
-    session = requests.Session()
-    session.headers.update(HEADERS)
+    
+    # Chrome 120 TLS Fingerprint taklidi ile bot engelini aşma
+    session = requests.Session(impersonate="chrome120")
 
-    # ROBITSHOP'UN CANLI VE DOĞRULANMIŞ GERÇEK LİNKLERİ
     targets = [
         "https://www.robitshop.com/meta-etiket/filament",
         "https://www.robitshop.com/kategori/pla-filamenetler",
@@ -133,7 +127,7 @@ def scrape_robitshop() -> list[dict]:
             target_url = base_url if page == 1 else f"{base_url}{sep}tp={page}"
 
             try:
-                res = session.get(target_url, timeout=12)
+                res = session.get(target_url, timeout=15)
                 
                 if res.status_code != 200:
                     print(f"Erişim Engeli / HTTP Hata {res.status_code}: {target_url}", flush=True)
