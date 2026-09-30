@@ -90,12 +90,19 @@ COLOR_ALIASES = {
 }
 
 MATERIAL_PATTERNS = [
-    ("PLA+", r"\bPLA\s*(?:\+|PLUS|PRO)\b"), ("PETG-CF", r"\bPETG[- ]?CF\b"),
-    ("PET-CF", r"\bPET[- ]?CF\d*\b"), ("PA-CF", r"\bPA\d*[- ]?CF\d*|NYLON[- ]?CF\d*"),
-    ("PETG", r"\bPETG\b"), ("ABS", r"\bABS\b"), ("PLA-CF", r"\bPLA[- ]?CF\b"), 
-    ("ASA", r"\bASA\b"), ("TPU", r"\bTPU\d*(?:[- ]?HF)?\b"), ("PVA", r"\bPVA\b"),
-    ("HIPS", r"\bHIPS\b"), ("Naylon/PA", r"\bNYLON\b|\bPA(?:6|12)?\b"),
-    ("PC", r"\bPC\b"), ("PLA", r"\bPLA\b")
+    ("PETG-CF", r"\bPETG[- ]?CF\b"),
+    ("PET-CF", r"\bPET[- ]?CF\d*\b"),
+    ("PA-CF", r"\bPA\d*[- ]?CF\d*|NYLON[- ]?CF\d*"),
+    ("PETG", r"\bPETG\b"),
+    ("ABS", r"\bABS\b"),
+    ("PLA-CF", r"\bPLA[- ]?CF\b"), 
+    ("ASA", r"\bASA\b"),
+    ("TPU", r"\bTPU\d*(?:[- ]?HF)?\b"),
+    ("PVA", r"\bPVA\b"),
+    ("HIPS", r"\bHIPS\b"),
+    ("Naylon/PA", r"\bNYLON\b|\bPA(?:6|12)?\b"),
+    ("PC", r"\bPC\b"),
+    ("PLA", r"\bPLA(?:\+|[- ]?PLUS|[- ]?PRO|[- ]?BASIC|[- ]?HS)?\b")  # PLA+ ve varyasyonları artık PLA kabul ediliyor
 ]
 
 EXCLUDE_TERMS = [
