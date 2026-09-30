@@ -4,8 +4,6 @@ import json
 import os
 import re
 import sqlite3
-import subprocess
-import sys
 import threading
 import concurrent.futures
 from datetime import datetime
@@ -44,15 +42,10 @@ def disable_browser_cache(response):
 
 
 COLOR_MAPPING = [
-    # 1. ÖZEL İSTİSNALAR VE DİREKT EŞLEŞMELER
     (r"(?=.*stone)(?=.*mercan)", "Kırmızı"),
-    (r"star|simli|glitter|sparkle", "Mavi"),  # Simli/Star serileri öncelikli Mavi
-
-    # 2. MAVİ VE PEMBE
+    (r"star|simli|glitter|sparkle", "Mavi"),
     (r"mavi|blue|lacivert|navy|bebek\s*mavisi|bebek\s*mavi|buz|ice|sky|gök|gok|turkuaz|teal|cyan|sapphire|ocean|okyanus|azure|cobalt|kobalt", "Mavi"),
     (r"pembe|pink|magenta|fuchsia|fuşya|fusya", "Pembe"),
-
-    # 3. TEMEL RENKLER
     (r"beyaz|white|ral\s*9003", "Beyaz"),
     (r"kahverengi|kahve|tuğla|mocha|brown|chocolate", "Kahverengi"),
     (r"mor|purple|violet", "Mor"),
@@ -102,15 +95,16 @@ MATERIAL_PATTERNS = [
     ("HIPS", r"\bHIPS\b"),
     ("Naylon/PA", r"\bNYLON\b|\bPA(?:6|12)?\b"),
     ("PC", r"\bPC\b"),
-    ("PLA", r"\bPLA(?:\+|[- ]?PLUS|[- ]?PRO|[- ]?BASIC|[- ]?HS)?\b")  # PLA+ ve varyasyonları artık PLA kabul ediliyor
+    ("PLA", r"\bPLA(?:\+|[- ]?PLUS|[- ]?PRO|[- ]?BASIC|[- ]?HS)?\b")
 ]
 
 EXCLUDE_TERMS = [
-    "tutucu", "holder", "destek", "ayak", "kolu", "stent", "aparat", "model", "yedek parça",
     "hub", "splitter", "buffer", "feeder", "cutter", "tube", "replacement", "ptfe", "kesici", "borusu", "bıçak", "makas",
-    "nozzle", "hotend", "extruder", "kurutucu", "dryer", "dry box", "vakum", "poşet", "reçine", "resin", "3d kalem", 
-    "spatula", "sprey", "rulman", "soğutucu", "fan", "step motor", "baskı tablası", "peı", "tabla", "sensör", "sensor", 
-    "yazıcı", "printer", "somun", "vida", "kayış", "kasnak", "fişek", "ısıtıcı", "termistör", "yapıştırıcı", "modül", "coupler"
+    "nozzle", "hotend", "extruder", "kurutucu", "dryer", "dry box", "vakum", "poşet",
+    "reçine", "resin", "3d kalem", "spatula", "sprey", "rulman", "soğutucu", "fan",
+    "step motor", "baskı tablası", "peı", "tabla", "sensör", "sensor", "yazıcı", "printer",
+    "somun", "vida", "kayış", "kasnak", "fişek", "ısıtıcı", "termistör", "yapıştırıcı",
+    "temizleme", "temizleyici", "modül", "kart", "sürücü", "coupler", "swatch", "numune"
 ]
 
 KNOWN_BRANDS = [
@@ -298,16 +292,6 @@ def scrape_source(source: dict) -> list[dict]:
     return scrape_shopify(source, headers)
 
 
-def run_robitshop_script():
-    """robitshop.py dosyasını arka planda bağımsız bir süreç olarak çalıştırır."""
-    try:
-        robit_path = APP_DIR / "robitshop.py"
-        if robit_path.exists():
-            subprocess.run([sys.executable, str(robit_path)], check=False)
-    except Exception as e:
-        print(f"Robitshop Script Çalıştırma Hatası: {e}", flush=True)
-
-
 def update_all() -> None:
     if not update_lock.acquire(blocking=False): return
     
@@ -333,9 +317,6 @@ def update_all() -> None:
                         print(f"[{s['name']}] Hata: {e}", flush=True)
 
             print(f">>> PORİMA: {total_saved} ADET FİLAMAN EKLENDİ <<<", flush=True)
-
-        print(">>> ROBİTSHOP SCRIPT'İ BAŞLATILIYOR... <<<", flush=True)
-        run_robitshop_script()
 
         update_state.update(message="Güncellendi", updated_at=datetime.now().strftime("%d.%m.%Y %H:%M"))
     finally:
@@ -385,4 +366,4 @@ if __name__ == "__main__":
     init_db()
     threading.Thread(target=update_all, daemon=True).start()
     port = int(os.environ.get("PORT", 10000))
-    serve(app, host="0.0.0.0", port=port, threads=4)
+    serve(app, host="0.0.0.0", port=port)
