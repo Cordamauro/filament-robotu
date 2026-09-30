@@ -1,12 +1,12 @@
 [
   {
     "name": "Porima 3D",
-    "url": "https://porima3d.com/products.json",
+    "url": "https://porima3d.com/collections/filamentler",
     "enabled": true
   },
   {
-    "name": "Robitshop",
-    "url": "https://www.robitshop.com/kategori/filament-1",
+    "name": "Senin Fabrikan",
+    "url": "https://seninfabrikan.com/collections/all",
     "enabled": true
   }
 ]
