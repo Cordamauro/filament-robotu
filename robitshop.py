@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import re
 import sqlite3
-import requests
 from pathlib import Path
 from urllib.parse import urljoin
 from datetime import datetime
 from bs4 import BeautifulSoup
+
+# Cloudflare / Bot engelini aşmak için requests_html / tls-client mantığı veya gelişmiş session
+import requests
 
 def data_dir() -> Path:
     root = Path(__file__).resolve().parent / "data"
@@ -15,10 +17,21 @@ def data_dir() -> Path:
 
 DB_PATH = data_dir() / "filaments_v9.db"
 
+# GERÇEK BROWSER TLS & HEADER TAKLİDİ
 HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7'
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7',
+    'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache',
+    'Sec-Ch-Ua': '"Google Chrome";v="123", "Not:A-Brand";v="8", "Chromium";v="123"',
+    'Sec-Ch-Ua-Mobile': '?0',
+    'Sec-Ch-Ua-Platform': '"Windows"',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'none',
+    'Sec-Fetch-User': '?1',
+    'Upgrade-Insecure-Requests': '1'
 }
 
 USD_RATE = 35.0
@@ -118,6 +131,12 @@ def scrape_robitshop() -> list[dict]:
     session = requests.Session()
     session.headers.update(HEADERS)
 
+    # Önce ana sayfaya gidip cookie alalım (Bot engelini aşmak için)
+    try:
+        session.get("https://www.robitshop.com/", timeout=10)
+    except Exception as e:
+        print(f"Ana sayfa cookie alma hatası: {e}", flush=True)
+
     targets = [
         "https://www.robitshop.com/marka/filenta",
         "https://www.robitshop.com/marka/esun",
@@ -134,18 +153,25 @@ def scrape_robitshop() -> list[dict]:
 
     for base_url in targets:
         for page in range(1, 10):
-            # Ticimax için çift parametre kontrolü (s= ve sayfa=)
             sep = "&" if "?" in base_url else "?"
             target_url = base_url if page == 1 else f"{base_url}{sep}s={page}"
 
             try:
                 res = session.get(target_url, timeout=12)
+                
+                # Eğer engellendiyse loga yazalım
                 if res.status_code != 200:
+                    print(f"Erişim Engeli / HTTP Hata {res.status_code}: {target_url}", flush=True)
                     break
 
                 soup = BeautifulSoup(res.text, "html.parser")
-                # Ticimax genişletilmiş CSS seçicileri
-                product_elements = soup.select(".product-item, .showcase, .ItemOrj, div[class*='productItem'], .Prd")
+                
+                # Ticimax ürün elementleri (genişletilmiş seçiciler)
+                product_elements = soup.select(".product-item, .showcase, .ItemOrj, div[class*='productItem'], .Prd, .ProductList .Item")
+
+                if not product_elements:
+                    # Alternatif kapsayıcı ara
+                    product_elements = soup.find_all("div", class_=re.compile(r"product|showcase|item", re.I))
 
                 if not product_elements:
                     break
