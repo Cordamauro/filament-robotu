@@ -1,21 +1,21 @@
+import re
 import sqlite3
 import requests
-import re
+from bs4 import BeautifulSoup
 from datetime import datetime
 from pathlib import Path
 
-# Veritabanı Yolunu Belirle (app.py ile aynı veritabanını kullanır)
+# Veritabanı Yolu (app.py ile tam aynı veritabanını kullanır)
 DB_PATH = Path(__file__).resolve().parent / "data" / "filaments_v9.db"
 
-# Engellenen Ürün Terimleri (Yedek Parça vb.)
+# Engellenecek Ekstra Parçalar
 EXCLUDE_TERMS = [
     "nozzle", "hotend", "extruder", "kurutucu", "dryer", "dry box", "vakum", "poşet",
     "reçine", "resin", "3d kalem", "spatula", "sprey", "rulman", "soğutucu", "fan",
     "step motor", "baskı tablası", "peı", "tabla", "sensör", "yazıcı", "printer",
-    "somun", "vida", "kayış", "kasnak", "fişek", "ısıtıcı", "termistör", "yapıştırıcı"
+    "somun", "vida", "kayış", "kasnak", "fişek", "ısıtıcı", "termistör", "yapıştırıcı", "naylonu"
 ]
 
-# Materyal Yakalama
 MATERIAL_PATTERNS = [
     ("PETG-CF", r"\bPETG[- ]?CF\b"),
     ("PET-CF", r"\bPET[- ]?CF\d*\b"),
@@ -33,19 +33,20 @@ MATERIAL_PATTERNS = [
 ]
 
 COLOR_MAPPING = [
-    (r"mavi|blue|lacivert|navy|turkuaz", "Mavi"),
+    (r"mavi|blue|lacivert|navy|turkuaz|aqua|pus mavisi", "Mavi"),
     (r"pembe|pink|magenta|fuşya", "Pembe"),
-    (r"beyaz|white", "Beyaz"),
-    (r"kahverengi|brown", "Kahverengi"),
-    (r"mor|purple", "Mor"),
+    (r"beyaz|white|süt beyazı|kemik beyazı|soğuk beyaz", "Beyaz"),
+    (r"kahverengi|brown|mocha|açık kahverengi|tuğla", "Kahverengi"),
+    (r"mor|purple|violet|lila|very peri", "Mor"),
     (r"gümüş|silver", "Gümüş"),
-    (r"yeşil|yesil|green|haki|mint", "Yeşil"),
-    (r"sarı|sari|yellow", "Sarı"),
-    (r"turuncu|orange", "Turuncu"),
-    (r"siyah|black", "Siyah"),
-    (r"gri|grey|gray|antrasit", "Gri"),
-    (r"kırmızı|kirmizi|red", "Kırmızı"),
-    (r"altın|gold", "Altın")
+    (r"yeşil|yesil|green|haki|mint|matcha|zeytin|çim|çam|yeşim", "Yeşil"),
+    (r"sarı|sari|yellow|badem sarısı|hardal", "Sarı"),
+    (r"turuncu|orange|mandalina|mercal", "Turuncu"),
+    (r"siyah|black|antrasit", "Siyah"),
+    (r"gri|grey|gray|beton grisi", "Gri"),
+    (r"kırmızı|kirmizi|red|itfaiye kırmızısı", "Kırmızı"),
+    (r"altın|gold|pirinç", "Altın"),
+    (r"bej|beige|kayısı", "Bej")
 ]
 
 def init_db():
@@ -59,16 +60,18 @@ def init_db():
     )""")
     conn.close()
 
-def is_valid_filament(name: str) -> bool:
-    name_lower = name.lower()
-    if any(term in name_lower for term in EXCLUDE_TERMS):
-        return False
-    if "filament" in name_lower or "filaman" in name_lower:
-        return True
-    for _, pattern in MATERIAL_PATTERNS:
-        if re.search(pattern, name, re.I):
-            return True
-    return False
+def clean_price(price_str: str) -> float:
+    if not price_str:
+        return 0.0
+    cleaned = re.sub(r"[^\d,.]", "", price_str)
+    if "," in cleaned and "." in cleaned:
+        cleaned = cleaned.replace(".", "").replace(",", ".")
+    elif "," in cleaned:
+        cleaned = cleaned.replace(",", ".")
+    try:
+        return float(cleaned)
+    except ValueError:
+        return 0.0
 
 def detect_material(name: str) -> str:
     for label, pattern in MATERIAL_PATTERNS:
@@ -84,70 +87,91 @@ def detect_color(name: str) -> str:
     return "Mavi"
 
 def scrape_senin_fabrikan():
-    print(">>> [Senin Fabrikan] Tarama Başladı...", flush=True)
+    print(">>> [Senin Fabrikan] Özel HTML Tarayıcısı Başlatıldı...", flush=True)
     
     session = requests.Session()
-    session.headers.update({
+    headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
-        'Accept': 'application/json, text/plain, */*'
-    })
+        'Accept-Language': 'tr-TR,tr;q=0.9'
+    }
 
     base_url = "https://seninfabrikan.com"
-    page = 1
+    target_urls = [
+        f"{base_url}/uc-boyutlu-yazici/filament/",
+        f"{base_url}/uc-boyutlu-yazici/filament/?sayfa=2",
+        f"{base_url}/uc-boyutlu-yazici/filament/?sayfa=3",
+        f"{base_url}/uc-boyutlu-yazici/filament/?sayfa=4"
+    ]
+
     items = []
 
-    while page <= 10:
-        req_url = f"{base_url}/products.json?page={page}&limit=250"
+    for target_url in target_urls:
         try:
-            res = session.get(req_url, timeout=12)
+            res = session.get(target_url, headers=headers, timeout=12)
             if res.status_code != 200:
-                break
+                continue
+
+            soup = BeautifulSoup(res.text, "html.parser")
             
-            products = res.json().get("products", [])
-            if not products:
-                break
+            # Ürün Kartlarını Yakala
+            cards = soup.find_all(["div", "article"], class_=lambda c: c and ("product" in c.lower() or "item" in c.lower()))
+            if not cards:
+                cards = soup.select(".product-item, .product-card, .item, .showProductScheme")
 
-            for p in products:
-                title = p.get('title', '')
-                images = p.get("images") or []
-                default_img = images[0].get("src") if images else ""
+            for card in cards:
+                title_elem = card.find(["a", "h2", "h3", "div"], class_=lambda c: c and ("title" in c.lower() or "name" in c.lower() or "product" in c.lower()))
+                link_elem = card.find("a", href=True)
+                price_elem = card.find(["span", "div", "p"], class_=lambda c: c and ("price" in c.lower() or "fiyat" in c.lower()))
+                img_elem = card.find("img")
 
-                for v in p.get("variants", []):
-                    if not v.get("available"):
-                        continue
+                if not title_elem or not link_elem:
+                    continue
 
-                    v_title = v.get('title', '')
-                    full_name = f"{title} {v_title if v_title != 'Default Title' else ''}"
+                title = title_elem.get_text(strip=True)
+                title_lower = title.lower()
 
-                    if not is_valid_filament(full_name):
-                        continue
+                # Parça/aksesuar engelleme
+                if any(term in title_lower for term in EXCLUDE_TERMS):
+                    continue
 
-                    price = float(v.get("price") or 0)
-                    if price <= 0:
-                        continue
+                if "filament" not in title_lower and not any(m[0].lower() in title_lower for m in MATERIAL_PATTERNS):
+                    continue
 
-                    v_img_src = v.get("featured_image", {}).get("src") if v.get("featured_image") else default_img
-                    if v_img_src and v_img_src.startswith("//"):
-                        v_img_src = "https:" + v_img_src
+                prod_url = link_elem["href"]
+                if not prod_url.startswith("http"):
+                    prod_url = base_url + ("/" + prod_url.lstrip("/"))
 
-                    items.append({
-                        "source": "Senin Fabrikan",
-                        "external_id": str(v.get("id")),
-                        "name": full_name,
-                        "brand": "Senin Fabrikan",
-                        "material": detect_material(full_name),
-                        "color": detect_color(full_name),
-                        "weight_g": 1000,
-                        "price": price,
-                        "old_price": float(v.get("compare_at_price") or 0) if v.get("compare_at_price") else None,
-                        "in_stock": 1,
-                        "url": f"{base_url}/products/{p.get('handle')}?variant={v.get('id')}",
-                        "image": v_img_src
-                    })
-            page += 1
+                price = clean_price(price_elem.get_text(strip=True)) if price_elem else 0.0
+                if price <= 0:
+                    continue
+
+                img_url = ""
+                if img_elem:
+                    img_url = img_elem.get("data-src") or img_elem.get("src") or ""
+                    if img_url.startswith("//"):
+                        img_url = "https:" + img_url
+                    elif img_url and not img_url.startswith("http"):
+                        img_url = base_url + ("/" + img_url.lstrip("/"))
+
+                brand = "eSUN" if "esun" in title_lower else ("Filenta" if "filenta" in title_lower else "Senin Fabrikan")
+
+                items.append({
+                    "source": "Senin Fabrikan",
+                    "external_id": prod_url.split("/")[-2] if len(prod_url.split("/")) > 2 else "",
+                    "name": title,
+                    "brand": brand,
+                    "material": detect_material(title),
+                    "color": detect_color(title),
+                    "weight_g": 1000,
+                    "price": price,
+                    "old_price": None,
+                    "in_stock": 1,
+                    "url": prod_url,
+                    "image": img_url
+                })
+
         except Exception as e:
-            print(f"Hata: {e}")
-            break
+            print(f"Hata ({target_url}): {e}")
 
     # Veritabanına Kaydet
     init_db()
@@ -170,7 +194,7 @@ def scrape_senin_fabrikan():
             saved_count += 1
         except Exception:
             pass
-    
+
     conn.commit()
     conn.close()
     
