@@ -140,8 +140,9 @@ def scrape_robitshop() -> list[dict]:
         "https://www.robitshop.com/kategori/abs-filamentler",
         "https://www.robitshop.com/kategori/tpu-flex-filament",
         "https://www.robitshop.com/kategori/ozel-filamentler",
-        "https://www.robitshop.com/marka/esun",        # DOĞRU MARKA LINKI
-        "https://www.robitshop.com/marka/creality"    # DOĞRU MARKA LINKI
+        "https://www.robitshop.com/marka/esun",
+        "https://www.robitshop.com/marka/creality",
+        "https://www.robitshop.com/marka/filenta"        # FILENTA MARKA LINKI EKLENDI
     ]
 
     print(">>> ROBITSHOP TAM VERİ TARAMASI BAŞLADI <<<", flush=True)
