@@ -106,12 +106,11 @@ MATERIAL_PATTERNS = [
 ]
 
 EXCLUDE_TERMS = [
+    "tutucu", "holder", "destek", "ayak", "kolu", "stent", "aparat", "model", "yedek parça",
     "hub", "splitter", "buffer", "feeder", "cutter", "tube", "replacement", "ptfe", "kesici", "borusu", "bıçak", "makas",
-    "nozzle", "hotend", "extruder", "kurutucu", "dryer", "dry box", "vakum", "poşet",
-    "reçine", "resin", "3d kalem", "spatula", "sprey", "rulman", "soğutucu", "fan",
-    "step motor", "baskı tablası", "peı", "tabla", "sensör", "sensor", "yazıcı", "printer",
-    "somun", "vida", "kayış", "kasnak", "fişek", "ısıtıcı", "termistör", "yapıştırıcı",
-    "temizleme", "temizleyici", "modül", "kart", "sürücü", "coupler", "swatch", "numune"
+    "nozzle", "hotend", "extruder", "kurutucu", "dryer", "dry box", "vakum", "poşet", "reçine", "resin", "3d kalem", 
+    "spatula", "sprey", "rulman", "soğutucu", "fan", "step motor", "baskı tablası", "peı", "tabla", "sensör", "sensor", 
+    "yazıcı", "printer", "somun", "vida", "kayış", "kasnak", "fişek", "ısıtıcı", "termistör", "yapıştırıcı", "modül", "coupler"
 ]
 
 KNOWN_BRANDS = [
