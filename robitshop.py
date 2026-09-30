@@ -118,25 +118,19 @@ def scrape_robitshop() -> list[dict]:
     session = requests.Session()
     session.headers.update(HEADERS)
 
-    # ROBITSHOP GERÇEK CANLI URL ADRESLERİ (404 ALMAYAN DOĞRU LINKLER)
+    # ROBITSHOP'UN CANLI VE DOĞRULANMIŞ GERÇEK LİNKLERİ
     targets = [
-        "https://www.robitshop.com/marka/filenta",
-        "https://www.robitshop.com/marka/esun",
-        "https://www.robitshop.com/marka/creality",
-        "https://www.robitshop.com/pla-filamentler",
-        "https://www.robitshop.com/3d-printer-filament",
-        "https://www.robitshop.com/pet-g-filament",
-        "https://www.robitshop.com/abs-filamentler",
-        "https://www.robitshop.com/tpu-flex-filament",
-        "https://www.robitshop.com/ozel-filamentler"
+        "https://www.robitshop.com/meta-etiket/filament",
+        "https://www.robitshop.com/kategori/pla-filamenetler",
+        "https://www.robitshop.com/kategori/filament-1"
     ]
 
     print(">>> ROBITSHOP TARAMASI BAŞLADI <<<", flush=True)
 
     for base_url in targets:
-        for page in range(1, 10):
+        for page in range(1, 12):
             sep = "&" if "?" in base_url else "?"
-            target_url = base_url if page == 1 else f"{base_url}{sep}s={page}"
+            target_url = base_url if page == 1 else f"{base_url}{sep}tp={page}"
 
             try:
                 res = session.get(target_url, timeout=12)
