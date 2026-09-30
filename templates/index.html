@@ -95,6 +95,7 @@
             overflow-y: auto;
         }
 
+        /* SADECE ACTIVE KILINDIĞINDA AÇILIR */
         .accordion-item-custom.active .accordion-content {
             display: flex;
         }
@@ -372,44 +373,44 @@
 <body>
 
 <div class="app-container">
-    <!-- AKORDEON AKILLI SOL SIDEBAR -->
+    <!-- İLK YÜKLENİŞTE KAPALI AKORDEON SIDEBAR -->
     <aside class="sidebar">
         <div class="sidebar-brand">
             🧵 Filament<span>Robotu</span>
         </div>
 
-        <!-- MAĞAZA -->
-        <div class="accordion-item-custom active">
+        <!-- MAĞAZA (İLK YÜKLENİŞTE KAPALI) -->
+        <div class="accordion-item-custom">
             <div class="accordion-header-custom" onclick="toggleAccordion(this)">
                 <span>STORE / MAĞAZA</span>
-                <span class="accordion-icon">-</span>
+                <span class="accordion-icon">+</span>
             </div>
             <div id="listSource" class="accordion-content"></div>
         </div>
 
-        <!-- MARKA -->
-        <div class="accordion-item-custom active">
+        <!-- MARKA (İLK YÜKLENİŞTE KAPALI) -->
+        <div class="accordion-item-custom">
             <div class="accordion-header-custom" onclick="toggleAccordion(this)">
                 <span>BRAND / MARKA</span>
-                <span class="accordion-icon">-</span>
+                <span class="accordion-icon">+</span>
             </div>
             <div id="listBrand" class="accordion-content"></div>
         </div>
 
-        <!-- MATERYAL -->
-        <div class="accordion-item-custom active">
+        <!-- MATERYAL (İLK YÜKLENİŞTE KAPALI) -->
+        <div class="accordion-item-custom">
             <div class="accordion-header-custom" onclick="toggleAccordion(this)">
                 <span>MATERIAL / MATERYAL</span>
-                <span class="accordion-icon">-</span>
+                <span class="accordion-icon">+</span>
             </div>
             <div id="listMaterial" class="accordion-content"></div>
         </div>
 
-        <!-- RENK -->
-        <div class="accordion-item-custom active">
+        <!-- RENK (İLK YÜKLENİŞTE KAPALI) -->
+        <div class="accordion-item-custom">
             <div class="accordion-header-custom" onclick="toggleAccordion(this)">
                 <span>COLOR / RENK</span>
-                <span class="accordion-icon">-</span>
+                <span class="accordion-icon">+</span>
             </div>
             <div id="listColor" class="accordion-content"></div>
         </div>
@@ -496,7 +497,7 @@ async function loadFilters() {
 function renderPills(containerId, items, filterType) {
     const container = document.getElementById(containerId);
     if (!items || items.length === 0) {
-        container.innerHTML = `<span class="text-muted style="font-size:0.75rem;">Veri yok</span>`;
+        container.innerHTML = `<span class="text-muted" style="font-size:0.75rem;">Veri yok</span>`;
         return;
     }
 
