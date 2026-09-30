@@ -8,6 +8,7 @@ import threading
 import concurrent.futures
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
@@ -99,6 +100,7 @@ MATERIAL_PATTERNS = [
 ]
 
 EXCLUDE_TERMS = [
+    "tutucu", "holder", "destek", "ayak", "kolu", "stent", "aparat", "model", "yedek parça",
     "hub", "splitter", "buffer", "feeder", "cutter", "tube", "replacement", "ptfe", "kesici", "borusu", "bıçak", "makas",
     "nozzle", "hotend", "extruder", "kurutucu", "dryer", "dry box", "vakum", "poşet",
     "reçine", "resin", "3d kalem", "spatula", "sprey", "rulman", "soğutucu", "fan",
@@ -109,7 +111,7 @@ EXCLUDE_TERMS = [
 
 KNOWN_BRANDS = [
     "Microzey", "Porima", "Filamix", "Beta Filament", "R3D", "Creality", "Anycubic", 
-    "Sunlu", "eSUN", "Polymaker", "Elegoo", "Spectrum", "Formfutura", "Bambu Lab"
+    "Sunlu", "eSUN", "Polymaker", "Elegoo", "Spectrum", "Formfutura", "Bambu Lab", "Filenta"
 ]
 
 
@@ -147,9 +149,13 @@ def is_valid_filament(name: str) -> bool:
     name_lower = name.lower()
     if any(term in name_lower for term in EXCLUDE_TERMS):
         return False
-    if "filament" not in name_lower:
-        return False
-    return True
+    if "filament" in name_lower:
+        return True
+    materials = ["pla", "petg", "abs", "tpu", "asa", "pva", "nylon", "carbon", "pc", "hips", "basic"]
+    for mat in materials:
+        if re.search(rf"\b{mat}\b", name_lower):
+            return True
+    return False
 
 
 def detect_color(text: str) -> str | None:
@@ -283,6 +289,93 @@ def scrape_shopify(source: dict, headers: dict) -> list[dict]:
     return items
 
 
+def scrape_robitshop_direct() -> list[dict]:
+    print(">>> ROBITSHOP DOĞRUDAN TARAMA BAŞLADI <<<", flush=True)
+    items = []
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7'
+    }
+    session = requests.Session()
+    session.headers.update(headers)
+
+    targets = [
+        "https://www.robitshop.com/meta-etiket/filament",
+        "https://www.robitshop.com/kategori/pla-filamenetler",
+        "https://www.robitshop.com/kategori/filament-1"
+    ]
+
+    for base_url in targets:
+        for page in range(1, 10):
+            sep = "&" if "?" in base_url else "?"
+            target_url = base_url if page == 1 else f"{base_url}{sep}tp={page}"
+
+            try:
+                res = session.get(target_url, timeout=10)
+                if res.status_code != 200:
+                    break
+
+                soup = BeautifulSoup(res.text, "html.parser")
+                product_elements = soup.select(".product-item, .showcase, .ItemOrj, div[class*='productItem'], .Prd, .ProductList .Item")
+
+                if not product_elements:
+                    product_elements = soup.find_all("div", class_=re.compile(r"product|showcase|item", re.I))
+
+                if not product_elements:
+                    break
+
+                added_in_page = 0
+                for elem in product_elements:
+                    elem_html = str(elem).lower()
+                    if "stokta yok" in elem_html or "tukendi" in elem_html or "tükendi" in elem_html:
+                        continue
+
+                    title_elem = elem.select_one(".product-title, .productName, .title, a[title]") or elem.find("a")
+                    price_elem = elem.select_one(".price, .fiyat, .discountPrice, [class*='Price']")
+
+                    if title_elem and price_elem:
+                        name = clean_text(title_elem.get_text(strip=True))
+                        if not is_valid_filament(name):
+                            continue
+
+                        price = price_number(price_elem.get_text(strip=True))
+                        if not price:
+                            continue
+
+                        href = title_elem.get("href") or (elem.find("a").get("href") if elem.find("a") else "")
+                        prod_url = urljoin("https://www.robitshop.com", href) if href else target_url
+
+                        img_elem = elem.find("img")
+                        img_src = ""
+                        if img_elem:
+                            img_src = img_elem.get("data-src") or img_elem.get("src") or img_elem.get("data-original") or ""
+                            if img_src and not img_src.startswith("http"):
+                                img_src = urljoin("https://www.robitshop.com", img_src)
+
+                        if not any(p["url"] == prod_url for p in items):
+                            items.append({
+                                "source": "Robitshop",
+                                "external_id": str(hash(prod_url)),
+                                "name": name,
+                                "price": price,
+                                "in_stock": 1,
+                                "url": prod_url,
+                                "image": img_src
+                            })
+                            added_in_page += 1
+
+                if added_in_page == 0 and page > 1:
+                    break
+
+            except Exception as e:
+                print(f"Robitshop Sayfa Hatası ({target_url}): {e}", flush=True)
+                break
+
+    print(f">>> ROBITSHOP TARAMASI BİTTİ: {len(items)} ADET FİLAMAN BULUNDU. <<<", flush=True)
+    return items
+
+
 def scrape_source(source: dict) -> list[dict]:
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
@@ -296,9 +389,10 @@ def update_all() -> None:
     if not update_lock.acquire(blocking=False): return
     
     update_state.update(running=True, message="Güncelleniyor…")
-    print(">>> PORİMA TARAMASI BAŞLADI <<<", flush=True)
+    print(">>> FİLAMAN TARAMA SÜRECİ BAŞLADI <<<", flush=True)
     
     try:
+        # 1. PORİMA VE DİĞER MAĞAZALAR TARANIYOR
         if SOURCES_PATH.exists():
             sources = json.loads(SOURCES_PATH.read_text(encoding="utf-8"))
             active_sources = [s for s in sources if s.get("enabled", True) and "robitshop" not in s.get("name", "").lower()]
@@ -316,7 +410,14 @@ def update_all() -> None:
                     except Exception as e:
                         print(f"[{s['name']}] Hata: {e}", flush=True)
 
-            print(f">>> PORİMA: {total_saved} ADET FİLAMAN EKLENDİ <<<", flush=True)
+        # 2. ROBİTSHOP DOĞRUDAN DÖNGÜ İÇİNDE TARANIYOR
+        try:
+            robit_items = scrape_robitshop_direct()
+            if robit_items:
+                r_count = save_products(robit_items)
+                print(f"[Robitshop] -> {r_count} adet tam filament veritabanına kaydedildi.", flush=True)
+        except Exception as e:
+            print(f"[Robitshop] Genel Tarama Hatası: {e}", flush=True)
 
         update_state.update(message="Güncellendi", updated_at=datetime.now().strftime("%d.%m.%Y %H:%M"))
     finally:
