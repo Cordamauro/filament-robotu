@@ -21,7 +21,9 @@ HEADERS = {
     'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7'
 }
 
-# Kesin Elenecek Aksesuar ve Parça Kelimeleri
+# Varsayılan USD Kuru (Robitshop USD Fiyatlarını TL'ye Çevirmek İçin)
+USD_RATE = 35.0
+
 EXCLUDE_TERMS = [
     "hub", "splitter", "buffer", "feeder", "cutter", "tube", "replacement", "ptfe", "kesici", "borusu", "bıçak", "makas",
     "nozzle", "hotend", "extruder", "kurutucu", "dryer", "dry box", "vakum", "poşet", "reçine", "resin", "3d kalem", 
@@ -50,7 +52,7 @@ COLOR_MAPPING = [
 ]
 
 MATERIAL_PATTERNS = [
-    ("PLA+", r"\bPLA\s*(?:\+|PLUS|PRO)\b"), ("PETG-CF", r"\bPETG[- ]?CF\b"),
+    ("PLA+", r"\bPLA\s*(?:\+|PLUS|PRO|BASIC|HS)\b"), ("PETG-CF", r"\bPETG[- ]?CF\b"),
     ("PET-CF", r"\bPET[- ]?CF\d*\b"), ("PA-CF", r"\bPA\d*[- ]?CF\d*|NYLON[- ]?CF\d*"),
     ("PETG", r"\bPETG\b"), ("ABS", r"\bABS\b"), ("PLA-CF", r"\bPLA[- ]?CF\b"), 
     ("ASA", r"\bASA\b"), ("TPU", r"\bTPU\d*(?:[- ]?HF)?\b"), ("PVA", r"\bPVA\b"),
@@ -65,29 +67,40 @@ def clean_text(value) -> str:
 def parse_price(text: str) -> float | None:
     if not text:
         return None
-    # Metin içerisindeki ilk sayısal fiyat yapısını güvenle ayıkla
+    
+    is_usd = "usd" in text.lower() or "$" in text
+    
+    # Metindeki sayısal değeri yakala
     match = re.search(r"(\d+[\d\.,]*)", text)
     if not match:
         return None
+        
     digits = match.group(1)
     if "," in digits and "." in digits:
         digits = digits.replace(".", "").replace(",", ".")
     elif "," in digits:
         digits = digits.replace(",", ".")
+        
     try:
         val = float(digits)
-        return val if val > 0 else None
+        if val <= 0:
+            return None
+            
+        # USD ise KDV ekleyip TL'ye çevir
+        if is_usd:
+            val = val * 1.20 * USD_RATE
+            
+        return round(val, 2)
     except ValueError:
         return None
 
 def is_robitshop_filament(name: str) -> bool:
-    """Robitshop'taki eSun dahil tüm filamentleri eksiksiz yakalayan esnek süzgeç."""
     name_lower = name.lower()
     if any(term in name_lower for term in EXCLUDE_TERMS):
         return False
     if "filament" in name_lower:
         return True
-    materials = ["pla", "petg", "abs", "tpu", "asa", "pva", "nylon", "carbon", "pc", "hips"]
+    materials = ["pla", "petg", "abs", "tpu", "asa", "pva", "nylon", "carbon", "pc", "hips", "basic"]
     for mat in materials:
         if re.search(rf"\b{mat}\b", name_lower):
             return True
@@ -106,27 +119,23 @@ def infer(name: str) -> dict:
 
 def scrape_robitshop() -> list[dict]:
     items = []
-    # Robitshop Filament Ağ Haritası
+    # GERÇEK VE DOĞRULANMIŞ ROBITSHOP URL HEDEFLERİ
     targets = [
-        "https://www.robitshop.com/kategori/filament-1",
+        "https://www.robitshop.com/kategori/filament",
         "https://www.robitshop.com/kategori/pla-filamentler",
         "https://www.robitshop.com/kategori/pet-g-filament",
         "https://www.robitshop.com/kategori/abs-filamentler",
         "https://www.robitshop.com/kategori/tpu-flex-filament",
         "https://www.robitshop.com/kategori/ozel-filamentler",
-        "https://www.robitshop.com/esun",
-        "https://www.robitshop.com/creality"
+        "https://www.robitshop.com/marka/esun",        # DOĞRU MARKA LINKI
+        "https://www.robitshop.com/marka/creality"    # DOĞRU MARKA LINKI
     ]
 
     print(">>> ROBITSHOP TAM VERİ TARAMASI BAŞLADI <<<", flush=True)
 
     for base_url in targets:
         for page in range(1, 15):
-            if page == 1:
-                target_url = base_url
-            else:
-                sep = "&" if "?" in base_url else "?"
-                target_url = f"{base_url}{sep}s={page}"
+            target_url = base_url if page == 1 else f"{base_url}?sayfa={page}"
 
             try:
                 res = requests.get(target_url, headers=HEADERS, timeout=12)
@@ -142,7 +151,6 @@ def scrape_robitshop() -> list[dict]:
                 added_in_page = 0
                 for elem in product_elements:
                     elem_html = str(elem).lower()
-                    # Stok Kontrolü
                     if "stokta yok" in elem_html or "tukendi" in elem_html or "tükendi" in elem_html:
                         continue
 
@@ -168,7 +176,6 @@ def scrape_robitshop() -> list[dict]:
                             if img_src and not img_src.startswith("http"):
                                 img_src = urljoin("https://www.robitshop.com", img_src)
 
-                        # Mükerrer Kontrolü (URL Bazlı)
                         if not any(p["url"] == prod_url for p in items):
                             items.append({
                                 "source": "Robitshop",
