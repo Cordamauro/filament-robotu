@@ -145,13 +145,7 @@ def is_valid_filament(name: str) -> bool:
     name_lower = name.lower()
     if any(term in name_lower for term in EXCLUDE_TERMS):
         return False
-    # Basitleştirilmiş filtre: "filament" lafı geçiyorsa VEYA PLA/PETG vb. varsa kabul eder
-    if "filament" in name_lower or "filaman" in name_lower:
-        return True
-    for _, pattern in MATERIAL_PATTERNS:
-        if re.search(pattern, name, re.I):
-            return True
-    return False
+    return True
 
 
 def detect_color(text: str) -> str | None:
@@ -205,31 +199,36 @@ def save_products(items: list[dict]) -> int:
     return saved
 
 
-def scrape_shopify(source: dict, headers: dict) -> list[dict]:
+def scrape_shopify(source: dict) -> list[dict]:
     items = []
     page = 1
     
+    session = requests.Session()
+    session.headers.update({
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Cache-Control': 'no-cache'
+    })
+
     raw_url = source["url"]
     base_url = raw_url.split("/products.json")[0].split("/collections")[0].rstrip("/")
-    
-    # Doğrudan girilen Shopify URL'sini kullanır
-    if "products.json" in raw_url:
-        json_endpoint = raw_url
-    else:
-        json_endpoint = f"{base_url}/products.json"
 
     while page <= 10:
-        sep = "&" if "?" in json_endpoint else "?"
-        req_url = f"{json_endpoint}{sep}page={page}&limit=250"
+        req_url = f"{base_url}/products.json?page={page}&limit=250"
         try:
-            res = requests.get(req_url, headers=headers, timeout=12)
-            if res.status_code != 200: break
+            res = session.get(req_url, timeout=15)
+            print(f"[{source['name']}] Sayfa {page} Yanıt Kodu: {res.status_code}", flush=True)
+            
+            if res.status_code != 200: 
+                break
+                
             products = res.json().get("products", [])
-            if not products: break
+            if not products: 
+                break
             
             for p in products:
                 title = p.get('title', '')
-                
                 images = p.get("images") or []
                 img_map = {img.get("id"): img.get("src") for img in images if img.get("id") and img.get("src")}
                 default_img = images[0].get("src") if images else ""
@@ -252,27 +251,11 @@ def scrape_shopify(source: dict, headers: dict) -> list[dict]:
                     if not v_img_src and v.get("featured_image"):
                         v_img_src = v.get("featured_image", {}).get("src")
 
-                    if not v_img_src and len(images) > 1:
-                        v_title_lower = v_title.lower()
-                        for img in images:
-                            src_lower = (img.get("src") or "").lower()
-                            alt_lower = (img.get("alt") or "").lower()
-                            
-                            for color_key, aliases in COLOR_ALIASES.items():
-                                if color_key in v_title_lower:
-                                    for alias in aliases:
-                                        if alias in src_lower or alias in alt_lower:
-                                            v_img_src = img.get("src")
-                                            break
-                                if v_img_src: break
-
                     if not v_img_src:
                         v_img_src = default_img
 
                     if v_img_src and v_img_src.startswith("//"):
                         v_img_src = "https:" + v_img_src
-                    elif v_img_src and not v_img_src.startswith("http"):
-                        v_img_src = base_url + "/" + v_img_src.lstrip("/")
 
                     price = price_number(v.get("price"))
                     if price and price > 0:
@@ -287,18 +270,10 @@ def scrape_shopify(source: dict, headers: dict) -> list[dict]:
                             "image": v_img_src
                         })
             page += 1
-        except Exception:
+        except Exception as e:
+            print(f"[{source['name']}] İstek Hatası: {e}", flush=True)
             break
     return items
-
-
-def scrape_source(source: dict) -> list[dict]:
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
-        'Accept': 'application/json, text/plain, */*',
-        'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7'
-    }
-    return scrape_shopify(source, headers)
 
 
 def update_all() -> None:
@@ -313,17 +288,14 @@ def update_all() -> None:
             active_sources = [s for s in sources if s.get("enabled", True)]
             
             total_saved = 0
-            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-                future_to_source = {executor.submit(scrape_source, s): s for s in active_sources}
-                for future in concurrent.futures.as_completed(future_to_source):
-                    s = future_to_source[future]
-                    try:
-                        items = future.result()
-                        count = save_products(items)
-                        total_saved += count
-                        print(f"[{s['name']}] -> {count} adet tam filament eklendi.", flush=True)
-                    except Exception as e:
-                        print(f"[{s['name']}] Hata: {e}", flush=True)
+            for s in active_sources:
+                try:
+                    items = scrape_shopify(s)
+                    count = save_products(items)
+                    total_saved += count
+                    print(f"[{s['name']}] -> {count} adet tam filament eklendi.", flush=True)
+                except Exception as e:
+                    print(f"[{s['name']}] Hata: {e}", flush=True)
 
             print(f">>> TARAMA BİTTİ. TOPLAM {total_saved} ADET FİLAMAN EKLENDİ/GÜNCELLENDİ. <<<", flush=True)
 
