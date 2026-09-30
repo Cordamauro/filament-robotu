@@ -21,7 +21,7 @@
             font-size: 13px;
         }
 
-        /* ÖZEL KOYU İNCE SCROLLBAR (KABA BEYAZ ÇUBUĞU BİTİRİR) */
+        /* ÖZEL KOYU İNCE SCROLLBAR */
         ::-webkit-scrollbar {
             width: 5px;
             height: 5px;
@@ -56,7 +56,7 @@
             max-height: 100vh;
         }
 
-        /* LOGO VE BAŞLIK ALANI */
+        /* LOGO VE BAŞLIK ALANI (TIKLANABİLİR) */
         .sidebar-brand {
             display: flex;
             align-items: center;
@@ -64,6 +64,13 @@
             padding-bottom: 0.6rem;
             border-bottom: 1px solid #282828;
             margin-bottom: 0.2rem;
+            cursor: pointer;
+            text-decoration: none;
+            user-select: none;
+        }
+
+        .sidebar-brand:hover .brand-text {
+            color: #ffffff;
         }
 
         .owl-logo-circle {
@@ -75,6 +82,11 @@
             align-items: center;
             justify-content: center;
             flex-shrink: 0;
+            transition: transform 0.2s ease;
+        }
+
+        .sidebar-brand:hover .owl-logo-circle {
+            transform: scale(1.05);
         }
 
         .brand-text {
@@ -134,7 +146,7 @@
             display: flex;
         }
 
-        /* DÜZELTİLMİŞ FİLTRE BUTONLARI (KESİLME YAPMAZ) */
+        /* FİLTRE VE SIRALAMA BUTONLARI */
         .filter-btn-pill {
             background-color: #222222;
             border: 1px solid #2d2d2d;
@@ -419,7 +431,8 @@
 <div class="app-container">
     <!-- SOL SIDEBAR -->
     <aside class="sidebar">
-        <div class="sidebar-brand">
+        <!-- LOGO VE BAŞLIK (TIKLANINCA ANA SAYFAYA SIFIRLAR) -->
+        <a class="sidebar-brand" onclick="clearAllFilters()">
             <div class="owl-logo-circle">
                 <svg width="26" height="26" viewBox="0 0 100 100" fill="none">
                     <path d="M50 18C40 18 30 22 28 28C28 38 35 48 50 48C65 48 72 38 72 28C70 22 60 18 50 18Z" fill="#3e2312"/>
@@ -434,6 +447,19 @@
                 </svg>
             </div>
             <div class="brand-text">Filament<span>Robotu</span></div>
+        </a>
+
+        <!-- SIRALAMA -->
+        <div class="accordion-item-custom">
+            <div class="accordion-header-custom" onclick="toggleAccordion(this)">
+                <span>SIRALAMA</span>
+                <span class="accordion-icon">+</span>
+            </div>
+            <div id="listSort" class="accordion-content">
+                <button class="filter-btn-pill" onclick="selectSort('asc')" id="sort_asc">Küçükten Büyüğe</button>
+                <button class="filter-btn-pill" onclick="selectSort('desc')" id="sort_desc">Büyükten Küçüğe</button>
+                <button class="filter-btn-pill" onclick="selectSort('date')" id="sort_date">Tarihe Göre</button>
+            </div>
         </div>
 
         <!-- MATERYAL -->
@@ -514,6 +540,10 @@ let selectedFilters = {
     color: ''
 };
 
+// Varsayılan sıralama küçükten büyüğe (asc) ama manuel seçilmediği için görünürde 'none'
+let currentSort = 'asc'; 
+let sortUserSelected = false;
+
 function toggleAccordion(headerElem) {
     const item = headerElem.parentElement;
     const icon = headerElem.querySelector('.accordion-icon');
@@ -580,13 +610,48 @@ function selectFilter(filterType, value) {
     loadProducts();
 }
 
+function selectSort(sortType) {
+    if (sortUserSelected && currentSort === sortType) {
+        // İkinci kez basılırsa seçimi kaldırır (otomatik asc'ye döner)
+        currentSort = 'asc';
+        sortUserSelected = false;
+    } else {
+        currentSort = sortType;
+        sortUserSelected = true;
+    }
+    updateSortUI();
+    loadProducts();
+}
+
+function updateSortUI() {
+    ['asc', 'desc', 'date'].forEach(type => {
+        const btn = document.getElementById('sort_' + type);
+        if (btn) {
+            if (sortUserSelected && currentSort === type) {
+                btn.classList.add('selected');
+            } else {
+                btn.classList.remove('selected');
+            }
+        }
+    });
+}
+
 async function loadProducts() {
     const q = document.getElementById('searchQuery').value;
 
     const url = `/api/products?source=${encodeURIComponent(selectedFilters.source)}&brand=${encodeURIComponent(selectedFilters.brand)}&material=${encodeURIComponent(selectedFilters.material)}&color=${encodeURIComponent(selectedFilters.color)}&q=${encodeURIComponent(q)}`;
     
     const res = await fetch(url);
-    const products = await res.json();
+    let products = await res.json();
+
+    // JS Tarafında Dinamik Sıralama Uygulanır
+    if (currentSort === 'asc') {
+        products.sort((a, b) => (a.price || 0) - (b.price || 0));
+    } else if (currentSort === 'desc') {
+        products.sort((a, b) => (b.price || 0) - (a.price || 0));
+    } else if (currentSort === 'date') {
+        products.sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0));
+    }
     
     const countBar = document.getElementById('resultCount');
     countBar.innerHTML = `Toplam <span>${products.length}</span> adet filament bulundu`;
@@ -629,7 +694,10 @@ async function loadProducts() {
 
 function clearAllFilters() {
     selectedFilters = { source: '', brand: '', material: '', color: '' };
+    currentSort = 'asc';
+    sortUserSelected = false;
     document.getElementById('searchQuery').value = '';
+    updateSortUI();
     loadFilters();
     loadProducts();
 }
