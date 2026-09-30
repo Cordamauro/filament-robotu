@@ -15,7 +15,7 @@
         /* BELİRGİN BETON GRİSİ SAYFA ARKA PLANI */
         body { background-color: #dce2e8; }
         
-        /* GERÇEK FİLAMENT MAKARALARI FOTOĞRAFLI YENİ HEADER BANNER */
+        /* GERÇEK FİLAMENT MAKARALARI FOTOĞRAFLI BANNER */
         .hero-banner {
             background-color: #2c251e;
             background-image: 
@@ -61,21 +61,29 @@
             margin-bottom: 1.8rem;
         }
 
+        /* DENGELİ İKİ SATIRLI RENK PALETİ KAPSAYICISI */
         .spool-bar {
             display: flex;
-            justify-content: center;
+            flex-direction: column;
             align-items: center;
-            gap: 12px;
-            flex-wrap: wrap;
+            gap: 10px;
             max-width: 900px;
             margin-left: auto;
             margin-right: auto;
             background-color: rgba(0, 0, 0, 0.55);
             backdrop-filter: blur(6px);
-            padding: 10px 18px;
-            border-radius: 30px;
+            padding: 12px 20px;
+            border-radius: 24px;
             border: 1px solid rgba(255, 255, 255, 0.2);
             box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        .spool-row {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
         }
 
         .spool-dot {
@@ -200,7 +208,7 @@
             <p class="hero-subtitle">En Uygun Fiyatlı Filamentleri Anında Karşılaştırın</p>
         </div>
         
-        <!-- DİNAMİK RENK TOPLARI -->
+        <!-- DİNAMİK DENGELİ RENK TOPLARI -->
         <div id="spoolBar" class="spool-bar"></div>
     </div>
 </div>
@@ -216,7 +224,7 @@
             </div>
             
             <div class="col-md-3">
-                <label class="form-label fw-bold">🏷️️ Marka</label>
+                <label class="form-label fw-bold">🏷️ Marka</label>
                 <select id="filterBrand" class="form-select" onchange="loadProducts()">
                     <option value="">Tüm Markalar</option>
                 </select>
@@ -315,11 +323,16 @@ async function loadFilters() {
     }
 }
 
+/* ORANTILI VE DENGELİ İKİ SATIRLI RENK DİZİLİMİ */
 function renderHeaderSpoolDots(colors) {
     const spoolBar = document.getElementById('spoolBar');
     if (!colors || colors.length === 0) return;
 
-    spoolBar.innerHTML = colors.map(color => `
+    const midIndex = Math.ceil(colors.length / 2);
+    const row1Colors = colors.slice(0, midIndex);
+    const row2Colors = colors.slice(midIndex);
+
+    const makeDotsHtml = (colorArray) => colorArray.map(color => `
         <div class="spool-dot" 
              style="${getColorStyle(color)}" 
              title="${color}" 
@@ -327,6 +340,14 @@ function renderHeaderSpoolDots(colors) {
              onclick="selectColorFromHeader('${color}')">
         </div>
     `).join('');
+
+    let html = `<div class="spool-row">${makeDotsHtml(row1Colors)}</div>`;
+    
+    if (row2Colors.length > 0) {
+        html += `<div class="spool-row">${makeDotsHtml(row2Colors)}</div>`;
+    }
+
+    spoolBar.innerHTML = html;
 }
 
 function selectColorFromHeader(colorName) {
