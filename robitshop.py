@@ -52,11 +52,17 @@ COLOR_MAPPING = [
 ]
 
 MATERIAL_PATTERNS = [
-    ("PLA+", r"\bPLA\s*(?:\+|PLUS|PRO|BASIC|HS)\b"), ("PETG-CF", r"\bPETG[- ]?CF\b"),
-    ("PET-CF", r"\bPET[- ]?CF\d*\b"), ("PA-CF", r"\bPA\d*[- ]?CF\d*|NYLON[- ]?CF\d*"),
-    ("PETG", r"\bPETG\b"), ("ABS", r"\bABS\b"), ("PLA-CF", r"\bPLA[- ]?CF\b"), 
-    ("ASA", r"\bASA\b"), ("TPU", r"\bTPU\d*(?:[- ]?HF)?\b"), ("PVA", r"\bPVA\b"),
-    ("PC", r"\bPC\b"), ("PLA", r"\bPLA\b")
+    ("PETG-CF", r"\bPETG[- ]?CF\b"),
+    ("PET-CF", r"\bPET[- ]?CF\d*\b"),
+    ("PA-CF", r"\bPA\d*[- ]?CF\d*|NYLON[- ]?CF\d*"),
+    ("PETG", r"\bPETG\b"),
+    ("ABS", r"\bABS\b"),
+    ("PLA-CF", r"\bPLA[- ]?CF\b"), 
+    ("ASA", r"\bASA\b"),
+    ("TPU", r"\bTPU\d*(?:[- ]?HF)?\b"),
+    ("PVA", r"\bPVA\b"),
+    ("PC", r"\bPC\b"),
+    ("PLA", r"\bPLA(?:\+|[- ]?PLUS|[- ]?PRO|[- ]?BASIC|[- ]?HS)?\b")
 ]
 
 KNOWN_BRANDS = ["eSUN", "Esun", "Creality", "Filenta", "Kingroon", "Sunlu", "Anycubic", "Microzey", "Porima"]
