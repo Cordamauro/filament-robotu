@@ -5,139 +5,316 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>3D Filament Arama Motoru - Fiyat Karşılaştırma</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- MONTSERRAT FONT -->
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,600;0,700;1,700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body, button, input, select, option, h1, h2, h3, h4, h5, h6 { 
-            font-family: 'Montserrat', sans-serif !important; 
+        * {
+            box-sizing: border-box;
         }
 
-        /* BELİRGİN BETON GRİSİ SAYFA ARKA PLANI */
-        body { background-color: #dce2e8; }
-        
-        /* GERÇEK FİLAMENT MAKARALARI FOTOĞRAFLI BANNER */
-        .hero-banner {
-            background-color: #2c251e;
-            background-image: 
-                linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.55)), 
-                url("{{ url_for('static', filename='header-bg.png') }}");
-            background-size: cover;
-            background-position: center 35%;
-            background-repeat: no-repeat;
-            border-bottom: 4px solid #1a1510;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.25);
-            padding: 3.5rem 1rem 2.5rem 1rem;
-            position: relative;
-            text-align: center;
+        body {
+            font-family: 'Inter', sans-serif !important;
+            background-color: #1e1e1e;
+            color: #e0e0e0;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
         }
 
-        .hero-title {
-            font-style: italic;
-            font-size: 3.2rem;
+        /* DÜZEN (LAYOUT) */
+        .app-container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* SOL SIDEBAR (FILTERS) */
+        .sidebar {
+            width: 260px;
+            background-color: #141414;
+            border-right: 1px solid #2a2a2a;
+            padding: 1rem;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 1.2rem;
+        }
+
+        .sidebar-brand {
+            font-size: 1.2rem;
             font-weight: 700;
             color: #ffffff;
-            background-color: rgba(0, 0, 0, 0.55);
-            backdrop-filter: blur(4px);
-            display: inline-block;
-            padding: 0.4rem 1.8rem;
-            border-radius: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            text-shadow: 2px 3px 8px rgba(0, 0, 0, 0.9);
-            letter-spacing: 0.5px;
-            margin-bottom: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding-bottom: 0.8rem;
+            border-bottom: 1px solid #2a2a2a;
         }
 
-        .hero-subtitle {
-            color: #f1f5f9;
-            font-size: 1.1rem;
-            font-weight: 600;
-            background-color: rgba(0, 0, 0, 0.55);
-            backdrop-filter: blur(4px);
-            display: inline-block;
-            padding: 0.3rem 1.2rem;
-            border-radius: 8px;
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            letter-spacing: 0.5px;
-            margin-bottom: 1.8rem;
+        .sidebar-brand span {
+            color: #ff9900;
         }
 
-        /* TAM RENK TOPLARINA GÖRE SIKIŞAN İÇ KUTU */
-        .spool-bar {
-            display: inline-flex;
+        .filter-group {
+            display: flex;
             flex-direction: column;
-            align-items: center;
-            gap: 10px;
-            width: fit-content;
-            margin-left: auto;
-            margin-right: auto;
-            background-color: rgba(0, 0, 0, 0.55);
-            backdrop-filter: blur(6px);
-            padding: 12px 18px;
-            border-radius: 24px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            gap: 0.4rem;
         }
 
-        .spool-row {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 12px;
-            width: auto;
+        .filter-label {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #888888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
-        .spool-dot {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            border: 2px solid rgba(255,255,255,0.6);
-            box-shadow: 0 3px 6px rgba(0,0,0,0.5);
-            transition: all 0.2s ease;
-            cursor: pointer;
-            flex-shrink: 0;
-        }
-
-        .spool-dot:hover { 
-            transform: scale(1.25); 
-            border-color: #ffffff;
-        }
-
-        .spool-dot.active {
-            transform: scale(1.3);
-            border: 3px solid #ffffff;
-            box-shadow: 0 0 15px rgba(255, 255, 255, 0.9);
-        }
-
-        .btn-update-icon {
-            background: linear-gradient(135deg, #2c3e50 0%, #000000 100%);
-            color: #e2e8f0;
-            border: 1px solid #181818;
-            border-top-right-radius: 8px;
-            border-bottom-right-radius: 8px;
-            padding: 0 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s ease;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-        }
-
-        .btn-update-icon:hover {
-            background: linear-gradient(135deg, #435b75 0%, #1a1a1a 100%);
+        .form-select-dark {
+            background-color: #242424;
             color: #ffffff;
-            transform: scale(1.02);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            border: 1px solid #383838;
+            font-size: 0.85rem;
+            padding: 0.45rem 0.6rem;
+            border-radius: 6px;
+        }
+
+        .form-select-dark:focus {
+            background-color: #2a2a2a;
+            color: #ffffff;
+            border-color: #ff9900;
+            box-shadow: none;
+        }
+
+        .btn-clear-sidebar {
+            background-color: transparent;
+            color: #ff5555;
+            border: 1px solid #442222;
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 0.4rem;
+            border-radius: 6px;
+            transition: all 0.2s;
+            margin-top: auto;
+        }
+
+        .btn-clear-sidebar:hover {
+            background-color: #331111;
+            color: #ff7777;
+        }
+
+        /* İÇERİK ALANI (MAIN CONTENT) */
+        .main-content {
+            flex-grow: 1;
+            background-color: #e5e5e5;
+            color: #222222;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ÜST ARAMA VE BİLGİ BAR */
+        .top-bar {
+            background-color: #1a1a1a;
+            color: #ffffff;
+            padding: 0.8rem 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            border-bottom: 1px solid #2c2c2c;
+        }
+
+        .search-container {
+            flex-grow: 1;
+            max-width: 500px;
+            display: flex;
+            gap: 6px;
+        }
+
+        .search-input-dark {
+            background-color: #2a2a2a;
+            border: 1px solid #3d3d3d;
+            color: #ffffff;
+            font-size: 0.85rem;
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
+        }
+
+        .search-input-dark:focus {
+            background-color: #333333;
+            color: #ffffff;
+            border-color: #ff9900;
+            box-shadow: none;
+        }
+
+        .search-input-dark::placeholder {
+            color: #888888;
+        }
+
+        .btn-update-dark {
+            background: #ff9900;
+            color: #111111;
+            border: none;
+            font-weight: 600;
+            padding: 0 12px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-update-dark:hover {
+            background: #e68a00;
+        }
+
+        .stats-bar {
+            font-size: 0.85rem;
+            color: #aaaaaa;
+            font-weight: 500;
+        }
+
+        .stats-bar span {
+            color: #ffffff;
+            font-weight: 700;
+        }
+
+        /* GRID ÜRÜN LİSTESİ */
+        .products-grid {
+            padding: 1.2rem;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 1rem;
+            overflow-y: auto;
+        }
+
+        /* BEYAZ ÜRÜN KARTLARI */
+        .filament-card {
+            background: #ffffff;
+            border-radius: 8px;
+            border: 1px solid #dcdcdc;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .filament-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 14px rgba(0,0,0,0.1);
+        }
+
+        .card-color-strip {
+            height: 4px;
+            width: 100%;
+        }
+
+        .card-img-wrap {
+            height: 120px;
+            background: #fafafa;
+            padding: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .card-img-wrap img {
+            max-height: 100%;
+            max-width: 100%;
+            object-fit: contain;
+        }
+
+        .card-body-custom {
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+        }
+
+        .brand-badge {
+            font-size: 0.65rem;
+            font-weight: 700;
+            color: #777777;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 2px;
+        }
+
+        .product-title-custom {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #111111;
+            line-height: 1.2;
+            height: 2.4em;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            margin-bottom: 6px;
+        }
+
+        .tags-row {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+
+        .tag-pill {
+            font-size: 0.65rem;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: #f0f0f0;
+            color: #444444;
+            border: 1px solid #e0e0e0;
+        }
+
+        .price-section {
+            margin-top: auto;
+            padding-top: 6px;
+            border-top: 1px solid #f2f2f2;
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+        }
+
+        .price-main {
+            font-size: 1.05rem;
+            font-weight: 800;
+            color: #111111;
+        }
+
+        .price-sub {
+            font-size: 0.7rem;
+            color: #777777;
+            font-weight: 600;
+        }
+
+        .btn-buy-orange {
+            background-color: #ff9900;
+            color: #ffffff;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-align: center;
+            text-decoration: none;
+            padding: 6px;
+            border-radius: 5px;
+            margin-top: 8px;
+            display: block;
+            transition: background 0.2s;
+        }
+
+        .btn-buy-orange:hover {
+            background-color: #e68a00;
+            color: #ffffff;
         }
 
         .svg-icon {
-            width: 18px;
-            height: 18px;
-            fill: #e2e8f0;
-            transition: transform 0.5s ease, fill 0.2s;
-        }
-
-        .btn-update-icon:hover .svg-icon {
-            fill: #ffffff;
+            width: 16px;
+            height: 16px;
+            fill: #111111;
         }
 
         .spinning {
@@ -148,166 +325,89 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-
-        .search-input-custom {
-            font-size: 0.88rem;
-            padding: 0.45rem 0.8rem;
-        }
-
-        .btn-clear-custom {
-            font-size: 0.88rem;
-            font-weight: 600;
-            padding: 0.45rem 0.8rem;
-            border-radius: 8px;
-            transition: all 0.2s ease;
-        }
-
-        .card { 
-            border: 1px solid #cbcfd5; 
-            border-radius: 12px; 
-            box-shadow: 0 4px 12px rgba(0,0,0,0.06); 
-            transition: transform 0.2s, box-shadow 0.2s; 
-            overflow: hidden; 
-            background-color: #ffffff;
-        }
-        .card:hover { transform: translateY(-4px); box-shadow: 0 8px 20px rgba(0,0,0,0.12); }
-        
-        /* ÜRÜN GÖRSEL KUTUSU */
-        .product-img-container { 
-            height: 200px; 
-            background-color: #e8ecf0; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
-            padding: 15px; 
-            border-bottom: 1px solid #dcdfe4; 
-            position: relative; 
-        }
-        
-        .product-img { 
-            max-height: 100%; 
-            max-width: 100%; 
-            object-fit: contain; 
-            mix-blend-mode: multiply; 
-            filter: contrast(102%);
-        }
-
-        .price-tag { font-size: 1.3rem; font-weight: 700; color: #198754; }
-        .stock-badge { position: absolute; top: 10px; right: 10px; font-size: 0.75rem; z-index: 2; font-weight: 600; }
-        .result-count-bar { font-size: 0.95rem; color: #343a40; font-weight: 600; margin-bottom: 1rem; }
-        .color-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 5px; border: 1px solid rgba(0,0,0,0.2); vertical-align: middle; }
     </style>
 </head>
 <body>
 
-<div class="hero-banner mb-4">
-    <div class="container text-center">
-        <div>
-            <h1 class="hero-title">3D Filament Arama Motoru</h1>
+<div class="app-container">
+    <!-- SOL SIDEBAR FİLTRELER -->
+    <aside class="sidebar">
+        <div class="sidebar-brand">
+            🧵 Filament<span>Robotu</span>
         </div>
-        <div>
-            <p class="hero-subtitle">En Uygun Fiyatlı Filamentleri Anında Karşılaştırın</p>
+
+        <div class="filter-group">
+            <span class="filter-label">Mağaza / Site</span>
+            <select id="filterSource" class="form-select form-select-dark" onchange="loadProducts()">
+                <option value="">Tüm Siteler</option>
+            </select>
         </div>
-        
-        <!-- TAM BOYUTTA ORTALANAN VE SIKIŞAN RENK ALANI -->
-        <div class="d-flex justify-content-center">
-            <div id="spoolBar" class="spool-bar"></div>
+
+        <div class="filter-group">
+            <span class="filter-label">Marka</span>
+            <select id="filterBrand" class="form-select form-select-dark" onchange="loadProducts()">
+                <option value="">Tüm Markalar</option>
+            </select>
         </div>
-    </div>
-</div>
 
-<div class="container mb-5">
-    <div class="card p-3 mb-3">
-        <div class="row g-3">
-            <div class="col-md-3">
-                <label class="form-label fw-bold">🏪 Mağaza / Site</label>
-                <select id="filterSource" class="form-select" onchange="loadProducts()">
-                    <option value="">Tüm Siteler</option>
-                </select>
-            </div>
-            
-            <div class="col-md-3">
-                <label class="form-label fw-bold">🏷️ Marka</label>
-                <select id="filterBrand" class="form-select" onchange="loadProducts()">
-                    <option value="">Tüm Markalar</option>
-                </select>
-            </div>
+        <div class="filter-group">
+            <span class="filter-label">Materyal</span>
+            <select id="filterMaterial" class="form-select form-select-dark" onchange="loadProducts()">
+                <option value="">Tüm Materyaller</option>
+            </select>
+        </div>
 
-            <div class="col-md-3">
-                <label class="form-label fw-bold">🧪 Materyal</label>
-                <select id="filterMaterial" class="form-select" onchange="loadProducts()">
-                    <option value="">Tüm Materyaller</option>
-                </select>
-            </div>
+        <div class="filter-group">
+            <span class="filter-label">Renk</span>
+            <select id="filterColor" class="form-select form-select-dark" onchange="loadProducts()">
+                <option value="">Tüm Renkler</option>
+            </select>
+        </div>
 
-            <div class="col-md-3">
-                <label class="form-label fw-bold">🎨 Renk</label>
-                <select id="filterColor" class="form-select" onchange="onColorDropdownChange()">
-                    <option value="">Tüm Renkler</option>
-                </select>
+        <button class="btn-clear-sidebar" onclick="clearAllFilters()">🧹 Filtreleri Temizle</button>
+    </aside>
+
+    <!-- SAĞ ANA İÇERİK ALANI -->
+    <main class="main-content">
+        <!-- ÜST KONTROL VE ARAMA BAR -->
+        <header class="top-bar">
+            <div class="search-container">
+                <input type="text" id="searchQuery" class="form-control search-input-dark" placeholder="Marka, renk, materyal veya ürün ara..." onkeyup="loadProducts()">
+                <button id="btnUpdate" class="btn-update-dark" title="Verileri Güncelle" onclick="triggerUpdate()">
+                    <svg id="updateIcon" class="svg-icon" viewBox="0 0 24 24">
+                        <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
+                    </svg>
+                </button>
             </div>
 
-            <div class="col-md-9 mt-3">
-                <div class="input-group">
-                    <input type="text" id="searchQuery" class="form-control search-input-custom" placeholder="Filament adı veya renk ara..." onkeyup="loadProducts()">
-                    <button id="btnUpdate" class="btn btn-update-icon" title="Verileri Güncelle" onclick="triggerUpdate()">
-                        <svg id="updateIcon" class="svg-icon" viewBox="0 0 24 24">
-                            <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
-                        </svg>
-                    </button>
-                </div>
-            </div>
-            
-            <div class="col-md-3 mt-3 d-flex align-items-end">
-                <button class="btn btn-outline-danger btn-clear-custom w-100" onclick="clearAllFilters()">🧹 Filtreleri Temizle</button>
+            <div id="resultCount" class="stats-bar">Yükleniyor...</div>
+        </header>
+
+        <!-- ÜRÜN KARTLARI DİZİLİMİ (GRID) -->
+        <div id="productList" class="products-grid">
+            <div class="text-center w-100 py-5 text-secondary">
+                <div class="spinner-border text-dark" role="status"></div>
+                <p class="mt-2">Filamentler Yükleniyor...</p>
             </div>
         </div>
-    </div>
-
-    <div class="d-flex justify-content-between align-items-center px-1">
-        <div id="resultCount" class="result-count-bar text-muted">Aranıyor...</div>
-    </div>
-
-    <div id="productList" class="row g-4">
-        <div class="text-center py-5">
-            <div class="spinner-border text-primary" role="status"></div>
-            <p class="mt-2 text-muted">Stoktaki Filamentler Yükleniyor...</p>
-        </div>
-    </div>
+    </main>
 </div>
 
 <script>
-function getColorStyle(colorName) {
-    if (!colorName) return 'background: #adb5bd;';
-    const c = colorName.toLowerCase().trim();
-    if (c.includes('kahverengi') || c.includes('kahve') || c.includes('mocha') || c.includes('tuğla')) return 'background: #795548;';
-    if (c.includes('kırmızı')) return 'background: #dc3545;';
-    if (c.includes('beyaz')) return 'background: #ffffff;';
-    if (c.includes('sarı')) return 'background: #ffc107;';
-    if (c.includes('siyah')) return 'background: #212529;';
-    if (c.includes('mavi')) return 'background: #0d6efd;';
-    if (c.includes('army')) return 'background: #4b5320;';
-    if (c.includes('yeşil')) return 'background: #198754;';
-    if (c.includes('turuncu')) return 'background: #fd7e14;';
-    if (c.includes('mor')) return 'background: #6f42c1;';
-    if (c.includes('pembe')) return 'background: #d63384;';
-    if (c.includes('gri') || c.includes('gümüş')) return 'background: #6c757d;';
-    if (c.includes('ten') || c.includes('somon') || c.includes('latte')) return 'background: #f5c6cb;';
-    if (c.includes('wood')) return 'background: #8b5a2b;';
-    if (c.includes('bakır')) return 'background: #b87333;';
-    if (c.includes('altın')) return 'background: linear-gradient(135deg, #ffd700, #b8860b);';
-    if (c.includes('şeffaf')) return 'background: rgba(255, 255, 255, 0.7); border: 1px dashed #6c757d;';
-    if (c.includes('geçiş')) return 'background: linear-gradient(135deg, #ff0000, #00ff00, #0000ff);';
-    if (c.includes('bordo')) return 'background: #800020;';
-    if (c.includes('bej')) return 'background: #f5f5dc;';
-    return 'background: #adb5bd;';
-}
-
 function getColorHex(colorName) {
-    const style = getColorStyle(colorName);
-    if (style.includes('gradient')) return '#d4af37';
-    if (style.includes('#')) return '#' + style.split('#')[1].split(';')[0];
-    return '#adb5bd';
+    if (!colorName) return '#adb5bd';
+    const c = colorName.toLowerCase().trim();
+    if (c.includes('kırmızı')) return '#dc3545';
+    if (c.includes('mavi')) return '#0d6efd';
+    if (c.includes('yeşil')) return '#198754';
+    if (c.includes('sarı')) return '#ffc107';
+    if (c.includes('siyah')) return '#212529';
+    if (c.includes('beyaz')) return '#cccccc';
+    if (c.includes('turuncu')) return '#fd7e14';
+    if (c.includes('mor')) return '#6f42c1';
+    if (c.includes('pembe')) return '#d63384';
+    if (c.includes('gri')) return '#6c757d';
+    return '#ff9900';
 }
 
 async function loadFilters() {
@@ -319,67 +419,9 @@ async function loadFilters() {
         populateSelect('filterBrand', data.brand, 'Tüm Markalar');
         populateSelect('filterMaterial', data.material, 'Tüm Materyaller');
         populateSelect('filterColor', data.color, 'Tüm Renkler');
-
-        renderHeaderSpoolDots(data.color);
     } catch (e) {
         console.error(e);
     }
-}
-
-/* ORANTILI VE DENGELİ İKİ SATIRLI RENK DİZİLİMİ */
-function renderHeaderSpoolDots(colors) {
-    const spoolBar = document.getElementById('spoolBar');
-    if (!colors || colors.length === 0) return;
-
-    const midIndex = Math.ceil(colors.length / 2);
-    const row1Colors = colors.slice(0, midIndex);
-    const row2Colors = colors.slice(midIndex);
-
-    const makeDotsHtml = (colorArray) => colorArray.map(color => `
-        <div class="spool-dot" 
-             style="${getColorStyle(color)}" 
-             title="${color}" 
-             data-color="${color}" 
-             onclick="selectColorFromHeader('${color}')">
-        </div>
-    `).join('');
-
-    let html = `<div class="spool-row">${makeDotsHtml(row1Colors)}</div>`;
-    
-    if (row2Colors.length > 0) {
-        html += `<div class="spool-row">${makeDotsHtml(row2Colors)}</div>`;
-    }
-
-    spoolBar.innerHTML = html;
-}
-
-function selectColorFromHeader(colorName) {
-    const colorSelect = document.getElementById('filterColor');
-    
-    if (colorSelect.value === colorName) {
-        colorSelect.value = '';
-    } else {
-        colorSelect.value = colorName;
-    }
-    
-    syncActiveSpoolDot();
-    loadProducts();
-}
-
-function onColorDropdownChange() {
-    syncActiveSpoolDot();
-    loadProducts();
-}
-
-function syncActiveSpoolDot() {
-    const selectedColor = document.getElementById('filterColor').value;
-    document.querySelectorAll('.spool-dot').forEach(dot => {
-        if (selectedColor && dot.getAttribute('data-color') === selectedColor) {
-            dot.classList.add('active');
-        } else {
-            dot.classList.remove('active');
-        }
-    });
 }
 
 function populateSelect(id, items, defaultText) {
@@ -407,43 +449,37 @@ async function loadProducts() {
     const products = await res.json();
     
     const countBar = document.getElementById('resultCount');
-    countBar.innerHTML = `🔍 Toplam <span class="text-primary fw-bold">${products.length}</span> adet stokta filament bulundu.`;
+    countBar.innerHTML = `Toplam <span>${products.length}</span> adet filament bulundu`;
 
     const list = document.getElementById('productList');
     if (products.length === 0) {
-        list.innerHTML = `<div class="col-12 text-center py-5"><h4 class="text-muted">Aramanızla eşleşen stokta filament bulunamadı.</h4><p>Lütfen "Verileri Güncelle" butonuna basıp bekleyin.</p></div>`;
+        list.innerHTML = `<div class="w-100 text-center py-5 text-muted">Aramanızla eşleşen stokta filament bulunamadı.</div>`;
         return;
     }
 
     list.innerHTML = products.map(p => {
-        const fallbackImg = "https://via.placeholder.com/300x300?text=3D+Filament";
+        const fallbackImg = "https://via.placeholder.com/200x200?text=3D+Filament";
         const imgSrc = p.image && p.image.trim() !== "" ? p.image : fallbackImg;
+        const stripColor = getColorHex(p.color);
 
         return `
-        <div class="col-sm-6 col-md-4 col-lg-3">
-            <div class="card h-100">
-                <div class="product-img-container">
-                    <span class="badge bg-success stock-badge">✓ Stokta Var</span>
-                    <img src="${imgSrc}" class="product-img" alt="${p.name}" onerror="this.onerror=null;this.src='${fallbackImg}';">
+        <div class="filament-card">
+            <div class="card-color-strip" style="background-color: ${stripColor};"></div>
+            <div class="card-img-wrap">
+                <img src="${imgSrc}" alt="${p.name}" onerror="this.onerror=null;this.src='${fallbackImg}';">
+            </div>
+            <div class="card-body-custom">
+                <div class="brand-badge">${p.brand || p.source}</div>
+                <div class="product-title-custom" title="${p.name}">${p.name}</div>
+                <div class="tags-row">
+                    <span class="tag-pill">${p.material}</span>
+                    <span class="tag-pill">${p.color}</span>
                 </div>
-                <div class="card-body d-flex flex-column p-3">
-                    <span class="badge bg-secondary mb-2 align-self-start">${p.source}</span>
-                    <h6 class="card-title text-truncate mb-2" title="${p.name}">${p.name}</h6>
-                    <div class="mb-3 d-flex align-items-center gap-1">
-                        <span class="badge bg-primary">${p.material}</span>
-                        <span class="badge bg-light text-dark border d-flex align-items-center">
-                            <span class="color-dot" style="${getColorStyle(p.color)}"></span>
-                            ${p.color}
-                        </span>
-                    </div>
-                    <div class="mt-auto pt-2 border-top d-flex justify-content-between align-items-center">
-                        <div>
-                            <div class="price-tag">${p.price} TL</div>
-                            <small class="text-muted">${p.kg_price ? Math.round(p.kg_price) + ' TL / kg' : ''}</small>
-                        </div>
-                        <a href="${p.url}" target="_blank" class="btn btn-sm btn-outline-primary fw-semibold">Siteye Git ↗</a>
-                    </div>
+                <div class="price-section">
+                    <span class="price-main">${p.price} TL</span>
+                    <span class="price-sub">${p.kg_price ? Math.round(p.kg_price) + ' TL/kg' : ''}</span>
                 </div>
+                <a href="${p.url}" target="_blank" class="btn-buy-orange">Siteye Git ↗</a>
             </div>
         </div>
     `}).join('');
@@ -455,7 +491,6 @@ function clearAllFilters() {
     document.getElementById('filterMaterial').value = '';
     document.getElementById('filterColor').value = '';
     document.getElementById('searchQuery').value = '';
-    syncActiveSpoolDot();
     loadProducts();
 }
 
@@ -473,7 +508,7 @@ async function triggerUpdate() {
         icon.classList.remove('spinning');
         loadFilters();
         loadProducts();
-    }, 10000);
+    }, 8000);
 }
 
 loadFilters();
