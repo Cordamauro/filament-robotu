@@ -24,6 +24,7 @@ HEADERS = {
 # Varsayılan USD Kuru (Robitshop USD Fiyatlarını TL'ye Çevirmek İçin)
 USD_RATE = 35.0
 
+# Kesin Elenecek Aksesuar, Tutucu ve Parça Kelimeleri
 EXCLUDE_TERMS = [
     "tutucu", "holder", "destek", "ayak", "kolu", "stent", "aparat", "model", "yedek parça",
     "hub", "splitter", "buffer", "feeder", "cutter", "tube", "replacement", "ptfe", "kesici", "borusu", "bıçak", "makas",
@@ -77,7 +78,6 @@ def parse_price(text: str) -> float | None:
     
     is_usd = "usd" in text.lower() or "$" in text
     
-    # Metindeki sayısal değeri yakala
     match = re.search(r"(\d+[\d\.,]*)", text)
     if not match:
         return None
@@ -93,7 +93,6 @@ def parse_price(text: str) -> float | None:
         if val <= 0:
             return None
             
-        # USD ise KDV ekleyip TL'ye çevir
         if is_usd:
             val = val * 1.20 * USD_RATE
             
@@ -103,20 +102,15 @@ def parse_price(text: str) -> float | None:
 
 def is_robitshop_filament(name: str) -> bool:
     name_lower = name.lower()
-    
-    # 1. Yasaklı kelimelerden biri varsa DIREKT ELE (tutucu, model, aparat vs.)
+    # Tutucu, aparat, sensör vb. yedek parçaları direkt ele
     if any(term in name_lower for term in EXCLUDE_TERMS):
         return False
-        
-    # 2. İçinde filament geçiyorsa veya belirli materyal ölçüsü/tipi barındırıyorsa al
     if "filament" in name_lower:
         return True
-        
-    materials = ["pla", "petg", "abs", "tpu", "asa", "pva", "nylon", "carbon", "pc", "hips"]
+    materials = ["pla", "petg", "abs", "tpu", "asa", "pva", "nylon", "carbon", "pc", "hips", "basic"]
     for mat in materials:
         if re.search(rf"\b{mat}\b", name_lower):
             return True
-            
     return False
 
 def infer(name: str) -> dict:
@@ -134,21 +128,22 @@ def scrape_robitshop() -> list[dict]:
     items = []
     # GERÇEK VE DOĞRULANMIŞ ROBITSHOP URL HEDEFLERİ
     targets = [
+        "https://www.robitshop.com/marka/filenta",        # Filenta Ürünleri
+        "https://www.robitshop.com/marka/esun",           # eSun Ürünleri
+        "https://www.robitshop.com/marka/creality",       # Creality Ürünleri
         "https://www.robitshop.com/kategori/filament",
         "https://www.robitshop.com/kategori/pla-filamentler",
         "https://www.robitshop.com/kategori/pet-g-filament",
         "https://www.robitshop.com/kategori/abs-filamentler",
         "https://www.robitshop.com/kategori/tpu-flex-filament",
-        "https://www.robitshop.com/kategori/ozel-filamentler",
-        "https://www.robitshop.com/marka/esun",
-        "https://www.robitshop.com/marka/creality",
-        "https://www.robitshop.com/marka/filenta"        # FILENTA MARKA LINKI EKLENDI
+        "https://www.robitshop.com/kategori/ozel-filamentler"
     ]
 
     print(">>> ROBITSHOP TAM VERİ TARAMASI BAŞLADI <<<", flush=True)
 
     for base_url in targets:
-        for page in range(1, 15):
+        # Taramayı 10 sayfa derinliğine çıkarıyoruz
+        for page in range(1, 11):
             target_url = base_url if page == 1 else f"{base_url}?sayfa={page}"
 
             try:
@@ -162,7 +157,6 @@ def scrape_robitshop() -> list[dict]:
                 if not product_elements:
                     break
 
-                added_in_page = 0
                 for elem in product_elements:
                     elem_html = str(elem).lower()
                     if "stokta yok" in elem_html or "tukendi" in elem_html or "tükendi" in elem_html:
@@ -199,10 +193,6 @@ def scrape_robitshop() -> list[dict]:
                                 "url": prod_url,
                                 "image": img_src
                             })
-                            added_in_page += 1
-
-                if added_in_page == 0 and page > 1:
-                    break
 
             except Exception as e:
                 print(f"Hata ({target_url}): {e}", flush=True)
