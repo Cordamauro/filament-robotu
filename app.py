@@ -4,12 +4,12 @@ import json
 import os
 import re
 import sqlite3
+import subprocess
 import sys
 import threading
 import concurrent.futures
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
@@ -46,7 +46,7 @@ def disable_browser_cache(response):
 COLOR_MAPPING = [
     # 1. ÖZEL İSTİSNALAR VE DİREKT EŞLEŞMELER
     (r"(?=.*stone)(?=.*mercan)", "Kırmızı"),
-    (r"star|simli|glitter|sparkle", "Mavi"),
+    (r"star|simli|glitter|sparkle", "Mavi"),  # Simli/Star serileri öncelikli Mavi
 
     # 2. MAVİ VE PEMBE
     (r"mavi|blue|lacivert|navy|bebek\s*mavisi|bebek\s*mavi|buz|ice|sky|gök|gok|turkuaz|teal|cyan|sapphire|ocean|okyanus|azure|cobalt|kobalt", "Mavi"),
@@ -109,7 +109,7 @@ EXCLUDE_TERMS = [
 
 KNOWN_BRANDS = [
     "Microzey", "Porima", "Filamix", "Beta Filament", "R3D", "Creality", "Anycubic", 
-    "Sunlu", "eSUN", "Esun", "Polymaker", "Elegoo", "Spectrum", "Formfutura", "Bambu Lab", "Filenta", "Kingroon"
+    "Sunlu", "eSUN", "Polymaker", "Elegoo", "Spectrum", "Formfutura", "Bambu Lab"
 ]
 
 
@@ -147,13 +147,9 @@ def is_valid_filament(name: str) -> bool:
     name_lower = name.lower()
     if any(term in name_lower for term in EXCLUDE_TERMS):
         return False
-    if "filament" in name_lower:
-        return True
-    materials = ["pla", "petg", "abs", "tpu", "asa", "pva", "nylon", "carbon", "pc", "hips"]
-    for mat in materials:
-        if re.search(rf"\b{mat}\b", name_lower):
-            return True
-    return False
+    if "filament" not in name_lower:
+        return False
+    return True
 
 
 def detect_color(text: str) -> str | None:
@@ -287,114 +283,35 @@ def scrape_shopify(source: dict, headers: dict) -> list[dict]:
     return items
 
 
-def scrape_robitshop(source: dict, headers: dict) -> list[dict]:
-    items = []
-    targets = [
-        "https://www.robitshop.com/kategori/filament-1",
-        "https://www.robitshop.com/kategori/pla-filamentler",
-        "https://www.robitshop.com/kategori/pet-g-filament",
-        "https://www.robitshop.com/kategori/abs-filamentler",
-        "https://www.robitshop.com/kategori/tpu-flex-filament",
-        "https://www.robitshop.com/esun",
-        "https://www.robitshop.com/creality"
-    ]
-
-    for base_url in targets:
-        for page in range(1, 10):
-            if page == 1:
-                target_url = base_url
-            else:
-                sep = "&" if "?" in base_url else "?"
-                target_url = f"{base_url}{sep}s={page}"
-
-            try:
-                res = requests.get(target_url, headers=headers, timeout=12)
-                if res.status_code != 200:
-                    break
-
-                soup = BeautifulSoup(res.text, "html.parser")
-                product_elements = soup.find_all("div", class_=re.compile(r"product-item|showcase|ItemOrj", re.I))
-
-                if not product_elements:
-                    break
-
-                added_in_page = 0
-                for elem in product_elements:
-                    elem_html = str(elem).lower()
-                    if "stokta yok" in elem_html or "tukendi" in elem_html or "tükendi" in elem_html:
-                        continue
-
-                    title_elem = elem.find(["a", "div", "span"], class_=re.compile(r"product-title|productName|title", re.I)) or elem.find("a")
-                    price_elem = elem.find(["span", "div"], class_=re.compile(r"price|fiyat|discountPrice", re.I))
-                    img_elem = elem.find("img")
-
-                    if title_elem and price_elem:
-                        name = clean_text(title_elem.get_text(strip=True))
-                        if not is_valid_filament(name):
-                            continue
-
-                        price = price_number(price_elem.get_text(strip=True))
-                        if not price or price <= 0:
-                            continue
-
-                        href = title_elem.get("href") or (elem.find("a").get("href") if elem.find("a") else "")
-                        prod_url = urljoin("https://www.robitshop.com", href) if href else target_url
-
-                        img_src = ""
-                        if img_elem:
-                            img_src = img_elem.get("data-src") or img_elem.get("src") or img_elem.get("data-original") or ""
-                            if img_src and not img_src.startswith("http"):
-                                img_src = urljoin("https://www.robitshop.com", img_src)
-
-                        if not any(p["url"] == prod_url for p in items):
-                            items.append({
-                                "source": source["name"],
-                                "external_id": str(hash(prod_url)),
-                                "name": name,
-                                "price": price,
-                                "old_price": None,
-                                "in_stock": 1,
-                                "url": prod_url,
-                                "image": img_src
-                            })
-                            added_in_page += 1
-
-                if added_in_page == 0 and page > 1:
-                    break
-
-            except Exception as e:
-                print(f"Robitshop Tarama Hatası ({target_url}): {e}")
-                break
-
-    return items
-
-
 def scrape_source(source: dict) -> list[dict]:
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
         'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7'
     }
-    
-    url = source.get("url", "").lower()
-    name = source.get("name", "").lower()
+    return scrape_shopify(source, headers)
 
-    if "robitshop" in name or "robitshop" in url:
-        return scrape_robitshop(source, headers)
-    else:
-        return scrape_shopify(source, headers)
+
+def run_robitshop_script():
+    """robitshop.py dosyasını arka planda bağımsız bir süreç olarak çalıştırır."""
+    try:
+        robit_path = APP_DIR / "robitshop.py"
+        if robit_path.exists():
+            subprocess.run([sys.executable, str(robit_path)], check=False)
+    except Exception as e:
+        print(f"Robitshop Script Çalıştırma Hatası: {e}", flush=True)
 
 
 def update_all() -> None:
     if not update_lock.acquire(blocking=False): return
     
     update_state.update(running=True, message="Güncelleniyor…")
-    print(">>> VERİ TARAMASI BAŞLADI <<<", flush=True)
+    print(">>> PORİMA TARAMASI BAŞLADI <<<", flush=True)
     
     try:
         if SOURCES_PATH.exists():
             sources = json.loads(SOURCES_PATH.read_text(encoding="utf-8"))
-            active_sources = [s for s in sources if s.get("enabled", True)]
+            active_sources = [s for s in sources if s.get("enabled", True) and "robitshop" not in s.get("name", "").lower()]
             
             total_saved = 0
             with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
@@ -409,7 +326,10 @@ def update_all() -> None:
                     except Exception as e:
                         print(f"[{s['name']}] Hata: {e}", flush=True)
 
-            print(f">>> TOPLAM {total_saved} ADET SADECE FİLAMENT EKLENDİ <<<", flush=True)
+            print(f">>> PORİMA: {total_saved} ADET FİLAMAN EKLENDİ <<<", flush=True)
+
+        print(">>> ROBİTSHOP SCRIPT'İ BAŞLATILIYOR... <<<", flush=True)
+        run_robitshop_script()
 
         update_state.update(message="Güncellendi", updated_at=datetime.now().strftime("%d.%m.%Y %H:%M"))
     finally:
