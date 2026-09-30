@@ -40,6 +40,38 @@
             max-height: 100vh;
         }
 
+        /* LOGO VE BAŞLIK ALANI */
+        .sidebar-brand {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding-bottom: 0.6rem;
+            border-bottom: 1px solid #282828;
+            margin-bottom: 0.2rem;
+        }
+
+        .owl-logo-circle {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background-color: #e8d8c8;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .brand-text {
+            font-size: 0.95rem;
+            font-weight: 800;
+            color: #ffffff;
+            letter-spacing: -0.3px;
+        }
+
+        .brand-text span {
+            color: #ff9900;
+        }
+
         /* AKORDEON ELEMANLARI */
         .accordion-item-custom {
             border-bottom: 1px solid #222222;
@@ -237,7 +269,6 @@
             width: 100%;
         }
 
-        /* TIKLANABİLİR GÖRSEL ALANI */
         .card-img-wrap {
             height: 105px;
             background: #fafafa;
@@ -366,8 +397,25 @@
 <body>
 
 <div class="app-container">
-    <!-- TÜRKÇELEŞTİRİLMİŞ SOL SIDEBAR -->
+    <!-- SOL SIDEBAR (YUVARLAK BAYKUŞ LOGOLU VE BAŞLIKLI) -->
     <aside class="sidebar">
+        <div class="sidebar-brand">
+            <div class="owl-logo-circle">
+                <svg width="20" height="20" viewBox="0 0 100 100" fill="none">
+                    <path d="M50 18C40 18 30 22 28 28C28 38 35 48 50 48C65 48 72 38 72 28C70 22 60 18 50 18Z" fill="#3e2312"/>
+                    <circle cx="38" cy="38" r="10" fill="#3e2312"/>
+                    <circle cx="62" cy="38" r="10" fill="#3e2312"/>
+                    <circle cx="38" cy="38" r="6" fill="#e8d8c8"/>
+                    <circle cx="62" cy="38" r="6" fill="#e8d8c8"/>
+                    <circle cx="38" cy="38" r="3" fill="#3e2312"/>
+                    <circle cx="62" cy="38" r="3" fill="#3e2312"/>
+                    <polygon points="50,42 46,50 54,50" fill="#e8d8c8"/>
+                    <path d="M26 44C26 65 38 85 50 85C62 85 74 65 74 44C65 52 50 54 50 54C50 54 35 52 26 44Z" fill="#3e2312"/>
+                </svg>
+            </div>
+            <div class="brand-text">Filament<span>Robotu</span></div>
+        </div>
+
         <!-- MATERYAL -->
         <div class="accordion-item-custom">
             <div class="accordion-header-custom" onclick="toggleAccordion(this)">
@@ -538,7 +586,6 @@ async function loadProducts() {
         <div class="filament-card">
             <div class="card-color-strip" style="background-color: ${stripColor};"></div>
             
-            <!-- TIKLANABİLİR GÖRSEL ALANI -->
             <a href="${p.url}" target="_blank" class="card-img-wrap" title="${p.name} - Mağazaya Git">
                 <img src="${imgSrc}" alt="${p.name}" onerror="this.onerror=null;this.src='${fallbackImg}';">
             </a>
