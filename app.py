@@ -206,27 +206,26 @@ def save_products(items: list[dict]) -> int:
 def scrape_shopify(source: dict, headers: dict) -> list[dict]:
     items = []
     page = 1
-    base_url = source["url"].split("/products.json")[0].split("/collections")[0].rstrip("/")
     
-    # Koleksiyon tanımlıysa /collections/xxx/products.json, değilse /products.json kullanılır
-    if "/collections/" in source["url"]:
-        coll_name = source["url"].split("/collections/")[1].split("/")[0]
-        json_endpoint = f"{base_url}/collections/{coll_name}/products.json"
-    else:
-        json_endpoint = f"{base_url}/products.json"
+    # URL'den domain adresi elde edilir
+    raw_url = source["url"]
+    base_url = raw_url.split("/products.json")[0].split("/collections")[0].rstrip("/")
+    
+    # Tam json adresi belirlenir (Porima için doğrudan belirtilen URL kullanılır)
+    json_endpoint = raw_url if "products.json" in raw_url else f"{base_url}/products.json"
 
     while page <= 10:
-        req_url = f"{json_endpoint}?page={page}&limit=250"
+        sep = "&" if "?" in json_endpoint else "?"
+        req_url = f"{json_endpoint}{sep}page={page}&limit=250"
         try:
-            res = requests.get(req_url, headers=headers, timeout=10)
+            res = requests.get(req_url, headers=headers, timeout=12)
             if res.status_code != 200: break
             products = res.json().get("products", [])
             if not products: break
             
             for p in products:
                 title = p.get('title', '')
-                if not is_valid_filament(title): continue
-
+                
                 images = p.get("images") or []
                 img_map = {img.get("id"): img.get("src") for img in images if img.get("id") and img.get("src")}
                 default_img = images[0].get("src") if images else ""
@@ -238,7 +237,8 @@ def scrape_shopify(source: dict, headers: dict) -> list[dict]:
                     v_title = v.get('title', '')
                     full_name = f"{title} {v_title if v_title != 'Default Title' else ''}"
                     
-                    if not is_valid_filament(full_name): continue
+                    if not is_valid_filament(full_name): 
+                        continue
 
                     v_img_src = None
                     v_img_id = v.get("image_id")
