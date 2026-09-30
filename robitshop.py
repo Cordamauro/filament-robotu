@@ -21,6 +21,7 @@ HEADERS = {
     'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7'
 }
 
+# Kesin Elenecek Aksesuar ve Parça Kelimeleri
 EXCLUDE_TERMS = [
     "hub", "splitter", "buffer", "feeder", "cutter", "tube", "replacement", "ptfe", "kesici", "borusu", "bıçak", "makas",
     "nozzle", "hotend", "extruder", "kurutucu", "dryer", "dry box", "vakum", "poşet", "reçine", "resin", "3d kalem", 
@@ -61,24 +62,32 @@ KNOWN_BRANDS = ["eSUN", "Esun", "Creality", "Filenta", "Kingroon", "Sunlu", "Any
 def clean_text(value) -> str:
     return re.sub(r"\s+", " ", BeautifulSoup(str(value or ""), "html.parser").get_text(" ")).strip()
 
-def price_number(value) -> float | None:
-    if value is None: return None
-    text = re.sub(r"[^\d,.]", "", str(value))
-    if not text: return None
-    if "," in text and "." in text: text = text.replace(".", "").replace(",", ".")
-    elif "," in text: text = text.replace(",", ".")
-    try: 
-        val = float(text)
+def parse_price(text: str) -> float | None:
+    if not text:
+        return None
+    # Metin içerisindeki ilk sayısal fiyat yapısını güvenle ayıkla
+    match = re.search(r"(\d+[\d\.,]*)", text)
+    if not match:
+        return None
+    digits = match.group(1)
+    if "," in digits and "." in digits:
+        digits = digits.replace(".", "").replace(",", ".")
+    elif "," in digits:
+        digits = digits.replace(",", ".")
+    try:
+        val = float(digits)
         return val if val > 0 else None
-    except ValueError: return None
+    except ValueError:
+        return None
 
-def is_valid_filament(name: str) -> bool:
+def is_robitshop_filament(name: str) -> bool:
+    """Robitshop'taki eSun dahil tüm filamentleri eksiksiz yakalayan esnek süzgeç."""
     name_lower = name.lower()
     if any(term in name_lower for term in EXCLUDE_TERMS):
         return False
     if "filament" in name_lower:
         return True
-    materials = ["pla", "petg", "abs", "tpu", "asa", "pva", "nylon", "carbon", "pc"]
+    materials = ["pla", "petg", "abs", "tpu", "asa", "pva", "nylon", "carbon", "pc", "hips"]
     for mat in materials:
         if re.search(rf"\b{mat}\b", name_lower):
             return True
@@ -97,31 +106,43 @@ def infer(name: str) -> dict:
 
 def scrape_robitshop() -> list[dict]:
     items = []
+    # Robitshop Filament Ağ Haritası
     targets = [
         "https://www.robitshop.com/kategori/filament-1",
         "https://www.robitshop.com/kategori/pla-filamentler",
         "https://www.robitshop.com/kategori/pet-g-filament",
         "https://www.robitshop.com/kategori/abs-filamentler",
         "https://www.robitshop.com/kategori/tpu-flex-filament",
+        "https://www.robitshop.com/kategori/ozel-filamentler",
         "https://www.robitshop.com/esun",
         "https://www.robitshop.com/creality"
     ]
 
-    print(">>> ROBITSHOP TARAMASI BAŞLADI <<<")
+    print(">>> ROBITSHOP TAM VERİ TARAMASI BAŞLADI <<<", flush=True)
+
     for base_url in targets:
-        for page in range(1, 10):
-            target_url = base_url if page == 1 else f"{base_url}{'&' if '?' in base_url else '?'}s={page}"
+        for page in range(1, 15):
+            if page == 1:
+                target_url = base_url
+            else:
+                sep = "&" if "?" in base_url else "?"
+                target_url = f"{base_url}{sep}s={page}"
+
             try:
                 res = requests.get(target_url, headers=HEADERS, timeout=12)
-                if res.status_code != 200: break
+                if res.status_code != 200:
+                    break
 
                 soup = BeautifulSoup(res.text, "html.parser")
                 product_elements = soup.find_all("div", class_=re.compile(r"product-item|showcase|ItemOrj", re.I))
-                if not product_elements: break
+
+                if not product_elements:
+                    break
 
                 added_in_page = 0
                 for elem in product_elements:
                     elem_html = str(elem).lower()
+                    # Stok Kontrolü
                     if "stokta yok" in elem_html or "tukendi" in elem_html or "tükendi" in elem_html:
                         continue
 
@@ -131,10 +152,12 @@ def scrape_robitshop() -> list[dict]:
 
                     if title_elem and price_elem:
                         name = clean_text(title_elem.get_text(strip=True))
-                        if not is_valid_filament(name): continue
+                        if not is_robitshop_filament(name):
+                            continue
 
-                        price = price_number(price_elem.get_text(strip=True))
-                        if not price: continue
+                        price = parse_price(price_elem.get_text(strip=True))
+                        if not price:
+                            continue
 
                         href = title_elem.get("href") or (elem.find("a").get("href") if elem.find("a") else "")
                         prod_url = urljoin("https://www.robitshop.com", href) if href else target_url
@@ -145,6 +168,7 @@ def scrape_robitshop() -> list[dict]:
                             if img_src and not img_src.startswith("http"):
                                 img_src = urljoin("https://www.robitshop.com", img_src)
 
+                        # Mükerrer Kontrolü (URL Bazlı)
                         if not any(p["url"] == prod_url for p in items):
                             items.append({
                                 "source": "Robitshop",
@@ -156,12 +180,14 @@ def scrape_robitshop() -> list[dict]:
                             })
                             added_in_page += 1
 
-                if added_in_page == 0 and page > 1: break
+                if added_in_page == 0 and page > 1:
+                    break
+
             except Exception as e:
-                print(f"Hata ({target_url}): {e}")
+                print(f"Hata ({target_url}): {e}", flush=True)
                 break
 
-    print(f">>> ROBITSHOP TARAMASI BİTTİ. {len(items)} ADET FİLAMAN BULUNDU. <<<")
+    print(f">>> ROBITSHOP TARAMASI TAMAMLANDI: TOPLAM {len(items)} ADET FİLAMAN BULUNDU. <<<", flush=True)
     return items
 
 def save_to_db(items: list[dict]):
@@ -189,7 +215,7 @@ def save_to_db(items: list[dict]):
             pass
     conn.commit()
     conn.close()
-    print(f">>> {saved} ADET ROBITSHOP ÜRÜNÜ VERİTABANINA BAŞARIYLA YAZILDI. <<<")
+    print(f">>> {saved} ADET ROBITSHOP ÜRÜNÜ VERİTABANINA BAŞARIYLA KAYDEDİLDİ. <<<", flush=True)
 
 if __name__ == "__main__":
     products = scrape_robitshop()
