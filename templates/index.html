@@ -83,23 +83,6 @@
             box-shadow: none;
         }
 
-        .btn-clear-sidebar {
-            background-color: transparent;
-            color: #ff5555;
-            border: 1px solid #442222;
-            font-size: 0.8rem;
-            font-weight: 600;
-            padding: 0.4rem;
-            border-radius: 6px;
-            transition: all 0.2s;
-            margin-top: auto;
-        }
-
-        .btn-clear-sidebar:hover {
-            background-color: #331111;
-            color: #ff7777;
-        }
-
         /* İÇERİK ALANI (MAIN CONTENT) */
         .main-content {
             flex-grow: 1;
@@ -123,7 +106,7 @@
 
         .search-container {
             flex-grow: 1;
-            max-width: 500px;
+            max-width: 520px;
             display: flex;
             gap: 6px;
         }
@@ -148,22 +131,38 @@
             color: #888888;
         }
 
-        .btn-update-dark {
-            background: #ff9900;
-            color: #111111;
+        /* KARE IKON BUTONLARI */
+        .btn-icon-square {
+            width: 36px;
+            height: 36px;
+            flex-shrink: 0;
             border: none;
-            font-weight: 600;
-            padding: 0 12px;
             border-radius: 6px;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: background 0.2s;
+            transition: background 0.2s, transform 0.1s;
+        }
+
+        .btn-update-dark {
+            background: #ff9900;
+            color: #111111;
         }
 
         .btn-update-dark:hover {
             background: #e68a00;
+        }
+
+        .btn-clear-dark {
+            background: #333333;
+            border: 1px solid #444444;
+            color: #ffffff;
+        }
+
+        .btn-clear-dark:hover {
+            background: #444444;
+            border-color: #555555;
         }
 
         .stats-bar {
@@ -314,7 +313,7 @@
         .svg-icon {
             width: 16px;
             height: 16px;
-            fill: #111111;
+            fill: currentColor;
         }
 
         .spinning {
@@ -363,8 +362,6 @@
                 <option value="">Tüm Renkler</option>
             </select>
         </div>
-
-        <button class="btn-clear-sidebar" onclick="clearAllFilters()">🧹 Filtreleri Temizle</button>
     </aside>
 
     <!-- SAĞ ANA İÇERİK ALANI -->
@@ -373,9 +370,17 @@
         <header class="top-bar">
             <div class="search-container">
                 <input type="text" id="searchQuery" class="form-control search-input-dark" placeholder="Marka, renk, materyal veya ürün ara..." onkeyup="loadProducts()">
-                <button id="btnUpdate" class="btn-update-dark" title="Verileri Güncelle" onclick="triggerUpdate()">
+                
+                <!-- YENİLENEN YAN YANA KARE IKON BUTONLARI -->
+                <button id="btnUpdate" class="btn-icon-square btn-update-dark" title="Verileri Güncelle" onclick="triggerUpdate()">
                     <svg id="updateIcon" class="svg-icon" viewBox="0 0 24 24">
                         <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
+                    </svg>
+                </button>
+
+                <button class="btn-icon-square btn-clear-dark" title="Filtreleri Temizle" onclick="clearAllFilters()">
+                    <svg class="svg-icon" viewBox="0 0 24 24">
+                        <path d="M19.36 6.36l-1.42-1.42L12 10.59 6.06 4.64 4.64 6.06 10.59 12l-5.95 5.94 1.42 1.42L12 13.41l5.94 5.95 1.42-1.42L13.41 12z"/>
                     </svg>
                 </button>
             </div>
