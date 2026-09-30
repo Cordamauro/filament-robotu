@@ -21,10 +21,8 @@ HEADERS = {
     'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7'
 }
 
-# Varsayılan USD Kuru (Robitshop USD Fiyatlarını TL'ye Çevirmek İçin)
 USD_RATE = 35.0
 
-# Kesin Elenecek Aksesuar, Tutucu ve Parça Kelimeleri
 EXCLUDE_TERMS = [
     "tutucu", "holder", "destek", "ayak", "kolu", "stent", "aparat", "model", "yedek parça",
     "hub", "splitter", "buffer", "feeder", "cutter", "tube", "replacement", "ptfe", "kesici", "borusu", "bıçak", "makas",
@@ -75,34 +73,25 @@ def clean_text(value) -> str:
 def parse_price(text: str) -> float | None:
     if not text:
         return None
-    
     is_usd = "usd" in text.lower() or "$" in text
-    
     match = re.search(r"(\d+[\d\.,]*)", text)
     if not match:
         return None
-        
     digits = match.group(1)
     if "," in digits and "." in digits:
         digits = digits.replace(".", "").replace(",", ".")
     elif "," in digits:
         digits = digits.replace(",", ".")
-        
     try:
         val = float(digits)
-        if val <= 0:
-            return None
-            
-        if is_usd:
-            val = val * 1.20 * USD_RATE
-            
+        if val <= 0: return None
+        if is_usd: val = val * 1.20 * USD_RATE
         return round(val, 2)
     except ValueError:
         return None
 
 def is_robitshop_filament(name: str) -> bool:
     name_lower = name.lower()
-    # Tutucu, aparat, sensör vb. yedek parçaları direkt ele
     if any(term in name_lower for term in EXCLUDE_TERMS):
         return False
     if "filament" in name_lower:
@@ -126,45 +115,49 @@ def infer(name: str) -> dict:
 
 def scrape_robitshop() -> list[dict]:
     items = []
-    # GERÇEK VE DOĞRULANMIŞ ROBITSHOP URL HEDEFLERİ
+    session = requests.Session()
+    session.headers.update(HEADERS)
+
     targets = [
-        "https://www.robitshop.com/marka/filenta",        # Filenta Ürünleri
-        "https://www.robitshop.com/marka/esun",           # eSun Ürünleri
-        "https://www.robitshop.com/marka/creality",       # Creality Ürünleri
-        "https://www.robitshop.com/kategori/filament",
+        "https://www.robitshop.com/marka/filenta",
+        "https://www.robitshop.com/marka/esun",
+        "https://www.robitshop.com/marka/creality",
         "https://www.robitshop.com/kategori/pla-filamentler",
+        "https://www.robitshop.com/kategori/filament",
         "https://www.robitshop.com/kategori/pet-g-filament",
         "https://www.robitshop.com/kategori/abs-filamentler",
         "https://www.robitshop.com/kategori/tpu-flex-filament",
         "https://www.robitshop.com/kategori/ozel-filamentler"
     ]
 
-    print(">>> ROBITSHOP TAM VERİ TARAMASI BAŞLADI <<<", flush=True)
+    print(">>> ROBITSHOP TARAMASI BAŞLADI <<<", flush=True)
 
     for base_url in targets:
-        # Taramayı 10 sayfa derinliğine çıkarıyoruz
-        for page in range(1, 11):
-            target_url = base_url if page == 1 else f"{base_url}?sayfa={page}"
+        for page in range(1, 10):
+            # Ticimax için çift parametre kontrolü (s= ve sayfa=)
+            sep = "&" if "?" in base_url else "?"
+            target_url = base_url if page == 1 else f"{base_url}{sep}s={page}"
 
             try:
-                res = requests.get(target_url, headers=HEADERS, timeout=12)
+                res = session.get(target_url, timeout=12)
                 if res.status_code != 200:
                     break
 
                 soup = BeautifulSoup(res.text, "html.parser")
-                product_elements = soup.find_all("div", class_=re.compile(r"product-item|showcase|ItemOrj", re.I))
+                # Ticimax genişletilmiş CSS seçicileri
+                product_elements = soup.select(".product-item, .showcase, .ItemOrj, div[class*='productItem'], .Prd")
 
                 if not product_elements:
                     break
 
+                added_in_page = 0
                 for elem in product_elements:
                     elem_html = str(elem).lower()
                     if "stokta yok" in elem_html or "tukendi" in elem_html or "tükendi" in elem_html:
                         continue
 
-                    title_elem = elem.find(["a", "div", "span"], class_=re.compile(r"product-title|productName|title", re.I)) or elem.find("a")
-                    price_elem = elem.find(["span", "div"], class_=re.compile(r"price|fiyat|discountPrice", re.I))
-                    img_elem = elem.find("img")
+                    title_elem = elem.select_one(".product-title, .productName, .title, a[title]") or elem.find("a")
+                    price_elem = elem.select_one(".price, .fiyat, .discountPrice, [class*='Price']")
 
                     if title_elem and price_elem:
                         name = clean_text(title_elem.get_text(strip=True))
@@ -178,6 +171,7 @@ def scrape_robitshop() -> list[dict]:
                         href = title_elem.get("href") or (elem.find("a").get("href") if elem.find("a") else "")
                         prod_url = urljoin("https://www.robitshop.com", href) if href else target_url
 
+                        img_elem = elem.find("img")
                         img_src = ""
                         if img_elem:
                             img_src = img_elem.get("data-src") or img_elem.get("src") or img_elem.get("data-original") or ""
@@ -193,12 +187,16 @@ def scrape_robitshop() -> list[dict]:
                                 "url": prod_url,
                                 "image": img_src
                             })
+                            added_in_page += 1
+
+                if added_in_page == 0 and page > 1:
+                    break
 
             except Exception as e:
                 print(f"Hata ({target_url}): {e}", flush=True)
                 break
 
-    print(f">>> ROBITSHOP TARAMASI TAMAMLANDI: TOPLAM {len(items)} ADET FİLAMAN BULUNDU. <<<", flush=True)
+    print(f">>> ROBITSHOP TARAMASI BİTTİ. TOPLAM {len(items)} ADET FİLAMAN BULUNDU. <<<", flush=True)
     return items
 
 def save_to_db(items: list[dict]):
