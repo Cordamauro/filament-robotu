@@ -25,6 +25,7 @@ HEADERS = {
 USD_RATE = 35.0
 
 EXCLUDE_TERMS = [
+    "tutucu", "holder", "destek", "ayak", "kolu", "stent", "aparat", "model", "yedek parça",
     "hub", "splitter", "buffer", "feeder", "cutter", "tube", "replacement", "ptfe", "kesici", "borusu", "bıçak", "makas",
     "nozzle", "hotend", "extruder", "kurutucu", "dryer", "dry box", "vakum", "poşet", "reçine", "resin", "3d kalem", 
     "spatula", "sprey", "rulman", "soğutucu", "fan", "step motor", "baskı tablası", "peı", "tabla", "sensör", "sensor", 
