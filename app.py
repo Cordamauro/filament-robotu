@@ -4,7 +4,6 @@ import os
 import re
 import sqlite3
 import threading
-import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urljoin
@@ -163,7 +162,6 @@ KNOWN_BRANDS = [
     "Inslogic",
     "Kingroon",
     "Apex",
-    "3dcim",
 ]
 
 
@@ -672,121 +670,6 @@ def fetch_robotistan() -> list[dict]:
     return items
 
 
-# GERÇEK VE ENGELSİZ 3DCİM XML FEED SCRAPER'I
-def fetch_3dcim() -> list[dict]:
-    items = []
-    seen_urls = set()
-    base_url = "https://www.3dcim.com"
-
-    # Ticimax altyapısının resmi XML Akış Uçları (Açık ve WAF Korumasız)
-    feed_urls = [
-        f"{base_url}/Xml/Cimri.xml",
-        f"{base_url}/Xml/Google.xml",
-        f"{base_url}/Xml/Akakce.xml",
-        f"{base_url}/Xml/Facebook.xml",
-    ]
-
-    session = requests.Session()
-    session.headers.update({
-        "User-Agent": "Googlebot/2.1 (+http://www.google.com/bot.html)",
-        "Accept": "text/xml, application/xml, */*",
-    })
-
-    xml_text = None
-    successful_url = ""
-
-    for url in feed_urls:
-        try:
-            res = session.get(url, timeout=30)
-            if res.status_code == 200 and len(res.text) > 1000:
-                xml_text = res.text
-                successful_url = url
-                print(f"[3dcim] Başarılı XML Veri Akışı Bağlandı: {url}", flush=True)
-                break
-        except Exception as e:
-            continue
-
-    if not xml_text:
-        print("[3dcim Error] Hiçbir XML beslemesi çekilemedi!", flush=True)
-        return items
-
-    try:
-        # XML Namespace temizliği (Google/Cimri xml farklarını eşitlemek için)
-        xml_clean = re.sub(r'\sxmlns="[^"]+"', '', xml_text, count=1)
-        root = ET.fromstring(xml_clean.encode('utf-8'))
-
-        # RSS, Cimri veya Google Merchant yapılarına göre ürün düğümlerini bul
-        nodes = root.findall(".//item") or root.findall(".//product") or root.findall(".//urun")
-
-        for p in nodes:
-            # İsmi Ayıkla
-            title_node = p.find("title") or p.find("name") or p.find("urunAdi") or p.find("UrunAdi")
-            title = title_node.text.strip() if title_node is not None and title_node.text else ""
-
-            if not title or not is_valid(title):
-                continue
-
-            # Ürün URL'sini Ayıkla
-            link_node = p.find("link") or p.find("url") or p.find("urunUrl") or p.find("UrunUrl")
-            raw_link = link_node.text.strip() if link_node is not None and link_node.text else ""
-            if not raw_link:
-                continue
-
-            p_url = urljoin(base_url, raw_link)
-            norm_url = p_url.split("?")[0].rstrip("/")
-
-            if norm_url in seen_urls:
-                continue
-
-            # Fiyatı Ayıkla
-            price_node = p.find("price") or p.find("satisFiyati") or p.find("SatisFiyati") or p.find("fiyat")
-            raw_price = price_node.text.strip() if price_node is not None and price_node.text else ""
-            price = clean_price(raw_price)
-
-            if not price or price <= 0:
-                continue
-
-            # Stok Kontrolü (Yalnızca %100 STOKTA OLANLAR!)
-            stock_node = p.find("stok") or p.find("stock") or p.find("availability") or p.find("stokAdedi") or p.find("StokAdedi")
-            stock_val = stock_node.text.strip().lower() if stock_node is not None and stock_node.text else ""
-
-            if stock_val in ["0", "false", "out of stock", "out_of_stock", "yok", "tükendi"]:
-                continue
-
-            # Görsel URL'sini Ayıkla
-            img_node = p.find("image_link") or p.find("image") or p.find("resim") or p.find("Resim1") or p.find("Resim")
-            raw_img = img_node.text.strip() if img_node is not None and img_node.text else ""
-
-            if not raw_img or "blank" in raw_img.lower() or raw_img.endswith(".svg"):
-                continue
-
-            if raw_img.startswith("//"):
-                raw_img = "https:" + raw_img
-            elif not raw_img.startswith("http"):
-                raw_img = urljoin(base_url, raw_img)
-
-            img_url = f"https://wsrv.nl/?url={raw_img}"
-
-            seen_urls.add(norm_url)
-            items.append({
-                "source": "3dcim",
-                "external_id": norm_url.split("/")[-1],
-                "name": title,
-                "price": price,
-                "old_price": None,
-                "in_stock": 1,
-                "weight_g": 1000,
-                "url": p_url,
-                "image": img_url,
-            })
-
-    except Exception as parse_err:
-        print(f"[3dcim Error] XML Parse Hatası: {parse_err}", flush=True)
-
-    print(f"[3dcim] XML Akışından Toplam {len(items)} stoklu ürün (Beton Gri dahil) başarıyla çekildi.", flush=True)
-    return items
-
-
 def run_update():
     if not update_lock.acquire(blocking=False):
         print(
@@ -807,6 +690,8 @@ def run_update():
                     """,
                     (f"%{term.casefold()}%",),
                 )
+            # Eski 3dcim verilerini veritabanından tamamen temizle
+            connection.execute("DELETE FROM products WHERE source = '3dcim'")
 
         # 1. Porima Taraması
         porima_items = fetch_porima()
@@ -823,14 +708,6 @@ def run_update():
                 connection.execute("DELETE FROM products WHERE source = 'Robotistan'")
             robotistan_count = save_items(robotistan_items)
             print(f"[Robotistan] -> {robotistan_count} benzersiz ürün kaydedildi.", flush=True)
-
-        # 3. 3dcim Taraması
-        tcim_items = fetch_3dcim()
-        if tcim_items:
-            with db() as connection:
-                connection.execute("DELETE FROM products WHERE source = '3dcim'")
-            tcim_count = save_items(tcim_items)
-            print(f"[3dcim] -> {tcim_count} benzersiz ürün kaydedildi.", flush=True)
 
         with db() as connection:
             connection.execute(
@@ -871,8 +748,6 @@ def products():
             filters.append("LOWER(source) LIKE '%porima%'")
         elif field == "source" and "robotistan" in value.casefold():
             filters.append("LOWER(source) LIKE '%robotistan%'")
-        elif field == "source" and "3dcim" in value.casefold():
-            filters.append("LOWER(source) LIKE '%3dcim%'")
         else:
             filters.append(f"{field} = ?")
             parameters.append(value)
