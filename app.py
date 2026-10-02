@@ -657,7 +657,6 @@ def fetch_3dcim() -> list[dict]:
     seen_urls = set()
 
     session = requests.Session()
-    # 3dcim Cloudflare engelini aşmak için gerçek tarayıcı istek başlığı
     session.headers.update(
         {
             "User-Agent": (
@@ -681,7 +680,6 @@ def fetch_3dcim() -> list[dict]:
 
     base_url = "https://www.3dcim.com"
 
-    # Sitede taranacak 3D Filament kategorileri
     categories = [
         "/3d-yazici-filament-cesitleri",
         "/pla-filamentler",
@@ -705,7 +703,6 @@ def fetch_3dcim() -> list[dict]:
 
                 soup = BeautifulSoup(response.text, "html.parser")
                 
-                # Ticimax E-Ticaret altyapısına özel genişletilmiş seçiciler
                 cards = soup.select(
                     ".product-item, .productItem, .product-box, [class*='product'], .p-card, .ItemOrj"
                 )
@@ -716,6 +713,20 @@ def fetch_3dcim() -> list[dict]:
                 new_products_on_page = 0
 
                 for card in cards:
+                    # Ticimax stok kontrolü: Stokta olmayan veya "Tükendi" ibaresi barındıran ürünleri ele
+                    card_html = str(card).lower()
+                    card_text = card.get_text(" ", strip=True).lower()
+
+                    if (
+                        "stokta yok" in card_text
+                        or "tükendi" in card_text
+                        or "out-of-stock" in card_html
+                        or "stoktayok" in card_html
+                        or "tuken-text" in card_html
+                        or card.select_one(".out-of-stock, .stokYok, .sold-out, .tukenText")
+                    ):
+                        continue
+
                     title_element = card.select_one(
                         ".product-title, .productName, h3, a.title, .p-name, .title, [class*='Name']"
                     )
@@ -799,7 +810,7 @@ def fetch_3dcim() -> list[dict]:
                 print(f"[3dcim] Kategori {cat_path} Sayfa {page_number} hatası: {error}", flush=True)
                 break
 
-    print(f"[3dcim] Toplam {len(items)} ürün bulundu.", flush=True)
+    print(f"[3dcim] Toplam {len(items)} stokta olan ürün bulundu.", flush=True)
     return items
 
 
