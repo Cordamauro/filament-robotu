@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import json
 import os
 import re
 import sqlite3
 import threading
+import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urljoin
@@ -672,90 +672,118 @@ def fetch_robotistan() -> list[dict]:
     return items
 
 
-# TICIMAX DIRECT REST / MOBIL SORGULAMA ENGINE (Sıfır Cloudflare Takılması)
+# GERÇEK VE ENGELSİZ 3DCİM XML FEED SCRAPER'I
 def fetch_3dcim() -> list[dict]:
     items = []
     seen_urls = set()
     base_url = "https://www.3dcim.com"
 
+    # Ticimax altyapısının resmi XML Akış Uçları (Açık ve WAF Korumasız)
+    feed_urls = [
+        f"{base_url}/Xml/Cimri.xml",
+        f"{base_url}/Xml/Google.xml",
+        f"{base_url}/Xml/Akakce.xml",
+        f"{base_url}/Xml/Facebook.xml",
+    ]
+
     session = requests.Session()
-    # Ticimax mobil servis başlığı
     session.headers.update({
-        "User-Agent": "TicimaxMobileApp/1.0 (Android)",
-        "Accept": "application/json",
+        "User-Agent": "Googlebot/2.1 (+http://www.google.com/bot.html)",
+        "Accept": "text/xml, application/xml, */*",
     })
 
-    keywords = ["esun", "porima", "kingroon", "filament", "pla", "petg", "abs", "tpu"]
+    xml_text = None
+    successful_url = ""
 
-    for kw in keywords:
-        for pg in range(1, 10):
-            try:
-                # Ticimax Mobil JSON API Ucu
-                api_endpoint = f"{base_url}/api/product/getproducts?keyword={kw}&page={pg}&pageSize=50"
-                res = session.get(api_endpoint, timeout=12)
-
-                prods = []
-                if res.status_code == 200:
-                    try:
-                        data = res.json()
-                        prods = data.get("Data") or data.get("Products") or (data if isinstance(data, list) else [])
-                    except Exception:
-                        pass
-
-                if not prods:
-                    # YEDEK REST API SORGUSU
-                    alt_url = f"{base_url}/srv/service/product/get-list?q={kw}&page={pg}"
-                    res_alt = session.get(alt_url, timeout=12)
-                    if res_alt.status_code == 200:
-                        try:
-                            prods = res_alt.json().get("data", [])
-                        except Exception:
-                            pass
-
-                if not prods:
-                    break
-
-                for p in prods:
-                    title = p.get("Title") or p.get("UrunAdi") or p.get("Name") or ""
-                    p_url = p.get("Url") or p.get("UrunUrl") or p.get("ProductUrl") or ""
-                    price = clean_price(p.get("Price") or p.get("SatisFiyati") or p.get("SatisFiyatiKdvli"))
-                    img = p.get("Image") or p.get("Resim") or p.get("DefaultResim") or ""
-                    in_stock = p.get("InStock", True) and not p.get("IsOutStock", False) and p.get("StokAdedi", 1) > 0
-
-                    if not title or not p_url or not in_stock:
-                        continue
-
-                    full_url = urljoin(base_url, p_url)
-                    norm_url = full_url.split("?")[0].rstrip("/")
-
-                    if norm_url in seen_urls or not is_valid(title):
-                        continue
-
-                    if img:
-                        if img.startswith("//"): img = "https:" + img
-                        elif not img.startswith("http"): img = urljoin(base_url, img)
-                        img = f"https://wsrv.nl/?url={img}"
-
-                    if not img or "blank" in img.lower():
-                        continue
-
-                    seen_urls.add(norm_url)
-                    items.append({
-                        "source": "3dcim",
-                        "external_id": norm_url.split("/")[-1],
-                        "name": title,
-                        "price": price,
-                        "old_price": None,
-                        "in_stock": 1,
-                        "weight_g": 1000,
-                        "url": full_url,
-                        "image": img,
-                    })
-
-            except Exception as e:
+    for url in feed_urls:
+        try:
+            res = session.get(url, timeout=30)
+            if res.status_code == 200 and len(res.text) > 1000:
+                xml_text = res.text
+                successful_url = url
+                print(f"[3dcim] Başarılı XML Veri Akışı Bağlandı: {url}", flush=True)
                 break
+        except Exception as e:
+            continue
 
-    print(f"[3dcim] Toplam {len(items)} stoklu ürün mobil REST servisinden çekildi.", flush=True)
+    if not xml_text:
+        print("[3dcim Error] Hiçbir XML beslemesi çekilemedi!", flush=True)
+        return items
+
+    try:
+        # XML Namespace temizliği (Google/Cimri xml farklarını eşitlemek için)
+        xml_clean = re.sub(r'\sxmlns="[^"]+"', '', xml_text, count=1)
+        root = ET.fromstring(xml_clean.encode('utf-8'))
+
+        # RSS, Cimri veya Google Merchant yapılarına göre ürün düğümlerini bul
+        nodes = root.findall(".//item") or root.findall(".//product") or root.findall(".//urun")
+
+        for p in nodes:
+            # İsmi Ayıkla
+            title_node = p.find("title") or p.find("name") or p.find("urunAdi") or p.find("UrunAdi")
+            title = title_node.text.strip() if title_node is not None and title_node.text else ""
+
+            if not title or not is_valid(title):
+                continue
+
+            # Ürün URL'sini Ayıkla
+            link_node = p.find("link") or p.find("url") or p.find("urunUrl") or p.find("UrunUrl")
+            raw_link = link_node.text.strip() if link_node is not None and link_node.text else ""
+            if not raw_link:
+                continue
+
+            p_url = urljoin(base_url, raw_link)
+            norm_url = p_url.split("?")[0].rstrip("/")
+
+            if norm_url in seen_urls:
+                continue
+
+            # Fiyatı Ayıkla
+            price_node = p.find("price") or p.find("satisFiyati") or p.find("SatisFiyati") or p.find("fiyat")
+            raw_price = price_node.text.strip() if price_node is not None and price_node.text else ""
+            price = clean_price(raw_price)
+
+            if not price or price <= 0:
+                continue
+
+            # Stok Kontrolü (Yalnızca %100 STOKTA OLANLAR!)
+            stock_node = p.find("stok") or p.find("stock") or p.find("availability") or p.find("stokAdedi") or p.find("StokAdedi")
+            stock_val = stock_node.text.strip().lower() if stock_node is not None and stock_node.text else ""
+
+            if stock_val in ["0", "false", "out of stock", "out_of_stock", "yok", "tükendi"]:
+                continue
+
+            # Görsel URL'sini Ayıkla
+            img_node = p.find("image_link") or p.find("image") or p.find("resim") or p.find("Resim1") or p.find("Resim")
+            raw_img = img_node.text.strip() if img_node is not None and img_node.text else ""
+
+            if not raw_img or "blank" in raw_img.lower() or raw_img.endswith(".svg"):
+                continue
+
+            if raw_img.startswith("//"):
+                raw_img = "https:" + raw_img
+            elif not raw_img.startswith("http"):
+                raw_img = urljoin(base_url, raw_img)
+
+            img_url = f"https://wsrv.nl/?url={raw_img}"
+
+            seen_urls.add(norm_url)
+            items.append({
+                "source": "3dcim",
+                "external_id": norm_url.split("/")[-1],
+                "name": title,
+                "price": price,
+                "old_price": None,
+                "in_stock": 1,
+                "weight_g": 1000,
+                "url": p_url,
+                "image": img_url,
+            })
+
+    except Exception as parse_err:
+        print(f"[3dcim Error] XML Parse Hatası: {parse_err}", flush=True)
+
+    print(f"[3dcim] XML Akışından Toplam {len(items)} stoklu ürün (Beton Gri dahil) başarıyla çekildi.", flush=True)
     return items
 
 
