@@ -589,13 +589,13 @@ def fetch_robotistan() -> list[dict]:
                         or image_element.get("data-lazy")
                         or image_element.get("src")
                         or ""
-                    )
+                    ).strip()
 
                     if raw_image:
-                        image_url = urljoin(
-                            base_url,
-                            raw_image,
-                        )
+                        if raw_image.startswith("//"):
+                            image_url = "https:" + raw_image
+                        else:
+                            image_url = urljoin(base_url, raw_image)
 
                 seen_urls.add(normalized_url)
 
