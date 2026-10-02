@@ -68,6 +68,20 @@ COLOR_MAPPING = [
     (r"bej|beige", "Bej")
 ]
 
+COLOR_ALIASES = {
+    "sarı": ["sari", "yellow"],
+    "kırmızı": ["kirmizi", "red", "mercan"],
+    "beyaz": ["beyaz", "white", "ral9003"],
+    "siyah": ["siyah", "black"],
+    "mavi": ["mavi", "blue", "lacivert", "navy", "bebek mavisi"],
+    "yeşil": ["yesil", "green", "haki", "matcha", "su yeşili"],
+    "pembe": ["pembe", "pink"],
+    "gümüş": ["gumus", "silver"],
+    "altın": ["altin", "gold"],
+    "somon": ["somon", "salmon"],
+    "şeffaf": ["seffaf", "transparent", "clear", "natural", "naturel"]
+}
+
 MATERIAL_PATTERNS = [
     ("PETG-CF", r"\bPETG[- ]?CF\b"),
     ("PET-CF", r"\bPET[- ]?CF\d*\b"),
@@ -198,10 +212,10 @@ def scrape_shopify(source: dict) -> list[dict]:
     raw_url = source["url"].rstrip("/")
     base_url = raw_url.split("/collections")[0]
 
-    # Porima koleksiyon adresi doğrudan düzenleniyor
+    # Porima için tam koleksiyon adresini tespit eder
     if "/collections/" in raw_url:
-        coll_name = raw_url.split("/collections/")[1].split("/")[0]
-        json_endpoint = f"{base_url}/collections/{coll_name}/products.json"
+        coll = raw_url.split("/collections/")[1].split("/")[0]
+        json_endpoint = f"{base_url}/collections/{coll}/products.json"
     else:
         json_endpoint = f"{base_url}/products.json"
 
@@ -313,8 +327,8 @@ def products():
         value = request.args.get(field, "").strip()
         if value: filters.append(f"{field} = ?"); params.append(value)
     if q:
-        filters.append("(name LIKE ? OR brand LIKE ? OR material LIKE ? OR color LIKE ?)")
-        params += [f"%{q}%"] * 4
+        filters.append("(name LIKE ? OR brand LIKE ? OR material LIKE ?)" )
+        params += [f"%{q}%"] * 3
     
     sql = "SELECT *, CASE WHEN weight_g > 0 THEN price * 1000.0 / weight_g END AS kg_price FROM products WHERE " + " AND ".join(filters) + " ORDER BY price ASC LIMIT 1000"
     
