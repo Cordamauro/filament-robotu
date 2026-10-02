@@ -272,11 +272,14 @@ def save_items(items: list[dict]) -> int:
         for product in items:
             name = product.get("name", "").strip()
             price = product.get("price")
+            image = product.get("image", "").strip()
 
+            # Resimsiz veya stoksuz ürün kesinlikle veritabanına giremez!
             if (
                 not name
                 or price is None
                 or price <= 0
+                or not image
                 or not is_valid(name)
             ):
                 continue
@@ -330,7 +333,7 @@ def save_items(items: list[dict]) -> int:
                         product.get("old_price"),
                         int(product.get("in_stock", 1)),
                         product.get("url"),
-                        product.get("image", ""),
+                        image,
                         now,
                     ),
                 )
@@ -415,6 +418,9 @@ def fetch_porima() -> list[dict]:
                         and variant_image.startswith("//")
                     ):
                         variant_image = "https:" + variant_image
+
+                    if not variant_image:
+                        continue
 
                     items.append(
                         {
@@ -599,6 +605,9 @@ def fetch_robotistan() -> list[dict]:
 
                         image_url = f"https://wsrv.nl/?url={full_img_url}"
 
+                if not image_url:
+                    continue
+
                 seen_urls.add(normalized_url)
 
                 items.append(
@@ -713,10 +722,10 @@ def fetch_3dcim() -> list[dict]:
                 new_products_on_page = 0
 
                 for card in cards:
-                    # Ticimax stok kontrolü: Stokta olmayan veya "Tükendi" ibaresi barındıran ürünleri ele
                     card_html = str(card).lower()
                     card_text = card.get_text(" ", strip=True).lower()
 
+                    # Stokta olmayan veya "Tükendi" ibaresi barındıran ürünleri sıkı şekilde ele
                     if (
                         "stokta yok" in card_text
                         or "tükendi" in card_text
@@ -768,6 +777,7 @@ def fetch_3dcim() -> list[dict]:
                     image_element = card.find("img")
                     image_url = ""
                     if image_element:
+                        # Ticimax lazy-loading resim adreslerini yakalama
                         raw_image = (
                             image_element.get("data-original")
                             or image_element.get("data-src")
@@ -776,7 +786,7 @@ def fetch_3dcim() -> list[dict]:
                             or ""
                         ).strip()
 
-                        if raw_image:
+                        if raw_image and not raw_image.endswith(".svg") and "blank" not in raw_image:
                             if raw_image.startswith("//"):
                                 full_img_url = "https:" + raw_image
                             elif raw_image.startswith("http"):
@@ -785,6 +795,10 @@ def fetch_3dcim() -> list[dict]:
                                 full_img_url = urljoin(base_url, raw_image)
 
                             image_url = f"https://wsrv.nl/?url={full_img_url}"
+
+                    # Görseli olmayan (stokta olmadığı için resmi yüklenmeyen) ürünleri ekleme!
+                    if not image_url:
+                        continue
 
                     seen_urls.add(normalized_url)
 
@@ -825,6 +839,7 @@ def run_update():
     print(">>> TARAMA BAŞLADI <<<", flush=True)
 
     try:
+        # Sitenin her zaman %100 güncel kalması için tarama başında eski/stoksuz kayıtları temizliyoruz
         with db() as connection:
             for term in EXCLUDE_TERMS:
                 connection.execute(
@@ -834,85 +849,37 @@ def run_update():
                     """,
                     (f"%{term.casefold()}%",),
                 )
+            # Görseli olmayan veya hatalı eski veritabanı kayıtlarını tamamen temizle
+            connection.execute("DELETE FROM products WHERE image IS NULL OR image = ''")
 
+        # 1. Porima Taraması
         porima_items = fetch_porima()
-
         if porima_items:
+            with db() as connection:
+                connection.execute("DELETE FROM products WHERE source = 'Porima 3D'")
             porima_count = save_items(porima_items)
+            print(f"[Porima 3D] -> {porima_count} ürün kaydedildi.", flush=True)
 
-            print(
-                f"[Porima 3D] -> "
-                f"{porima_count} ürün kaydedildi.",
-                flush=True,
-            )
-        else:
-            print(
-                "[Porima 3D] Ürün bulunamadı; "
-                "mevcut kayıtlar korundu.",
-                flush=True,
-            )
-
+        # 2. Robotistan Taraması
         robotistan_items = fetch_robotistan()
-
         if robotistan_items:
             with db() as connection:
-                connection.execute(
-                    """
-                    DELETE FROM products
-                    WHERE source = ?
-                    """,
-                    ("Robotistan",),
-                )
+                connection.execute("DELETE FROM products WHERE source = 'Robotistan'")
+            robotistan_count = save_items(robotistan_items)
+            print(f"[Robotistan] -> {robotistan_count} benzersiz ürün kaydedildi.", flush=True)
 
-            robotistan_count = save_items(
-                robotistan_items
-            )
-
-            print(
-                f"[Robotistan] -> "
-                f"{robotistan_count} benzersiz ürün kaydedildi.",
-                flush=True,
-            )
-        else:
-            print(
-                "[Robotistan] Ürün bulunamadı; "
-                "mevcut kayıtlar korundu.",
-                flush=True,
-            )
-
+        # 3. 3dcim Taraması
         tcim_items = fetch_3dcim()
-
         if tcim_items:
             with db() as connection:
-                connection.execute(
-                    """
-                    DELETE FROM products
-                    WHERE source = ?
-                    """,
-                    ("3dcim",),
-                )
-
+                connection.execute("DELETE FROM products WHERE source = '3dcim'")
             tcim_count = save_items(tcim_items)
-
-            print(
-                f"[3dcim] -> "
-                f"{tcim_count} benzersiz ürün kaydedildi.",
-                flush=True,
-            )
-        else:
-            print(
-                "[3dcim] Ürün bulunamadı; "
-                "mevcut kayıtlar korundu.",
-                flush=True,
-            )
+            print(f"[3dcim] -> {tcim_count} benzersiz ürün kaydedildi.", flush=True)
 
         print(">>> TARAMA TAMAMLANDI <<<", flush=True)
 
     except Exception as error:
-        print(
-            f">>> GÜNCELLEME HATASI: {error} <<<",
-            flush=True,
-        )
+        print(f">>> GÜNCELLEME HATASI: {error} <<<", flush=True)
 
     finally:
         update_lock.release()
@@ -925,52 +892,21 @@ def index():
 
 @app.get("/api/products")
 def products():
-    search_query = request.args.get(
-        "q",
-        "",
-    ).strip()
-
-    filters = ["in_stock = 1"]
+    search_query = request.args.get("q", "").strip()
+    filters = ["in_stock = 1", "image IS NOT NULL", "image != ''"]
     parameters = []
 
-    for field in (
-        "brand",
-        "material",
-        "color",
-        "source",
-    ):
-        value = request.args.get(
-            field,
-            "",
-        ).strip()
-
+    for field in ("brand", "material", "color", "source"):
+        value = request.args.get(field, "").strip()
         if not value:
             continue
 
-        if (
-            field == "source"
-            and "porima" in value.casefold()
-        ):
-            filters.append(
-                "LOWER(source) LIKE '%porima%'"
-            )
-
-        elif (
-            field == "source"
-            and "robotistan" in value.casefold()
-        ):
-            filters.append(
-                "LOWER(source) LIKE '%robotistan%'"
-            )
-
-        elif (
-            field == "source"
-            and "3dcim" in value.casefold()
-        ):
-            filters.append(
-                "LOWER(source) LIKE '%3dcim%'"
-            )
-
+        if field == "source" and "porima" in value.casefold():
+            filters.append("LOWER(source) LIKE '%porima%'")
+        elif field == "source" and "robotistan" in value.casefold():
+            filters.append("LOWER(source) LIKE '%robotistan%'")
+        elif field == "source" and "3dcim" in value.casefold():
+            filters.append("LOWER(source) LIKE '%3dcim%'")
         else:
             filters.append(f"{field} = ?")
             parameters.append(value)
@@ -988,14 +924,7 @@ def products():
         )
 
         query_value = f"%{search_query}%"
-        parameters.extend(
-            [
-                query_value,
-                query_value,
-                query_value,
-                query_value,
-            ]
-        )
+        parameters.extend([query_value] * 4)
 
     sql = """
         SELECT *,
@@ -1010,13 +939,7 @@ def products():
     """.format(" AND ".join(filters))
 
     with db() as connection:
-        rows = [
-            dict(row)
-            for row in connection.execute(
-                sql,
-                parameters,
-            )
-        ]
+        rows = [dict(row) for row in connection.execute(sql, parameters)]
 
     return jsonify(rows)
 
@@ -1026,31 +949,24 @@ def filters():
     with db() as connection:
         values = {}
 
-        for field in (
-            "brand",
-            "material",
-            "color",
-            "source",
-        ):
+        for field in ("brand", "material", "color", "source"):
             sql = f"""
                 SELECT DISTINCT {field}
                 FROM products
                 WHERE {field} IS NOT NULL
                   AND {field} != ''
                   AND in_stock = 1
+                  AND image IS NOT NULL AND image != ''
                 ORDER BY {field}
             """
 
-            values[field] = [
-                row[0]
-                for row in connection.execute(sql)
-            ]
+            values[field] = [row[0] for row in connection.execute(sql)]
 
         values["count"] = connection.execute(
             """
             SELECT COUNT(*)
             FROM products
-            WHERE in_stock = 1
+            WHERE in_stock = 1 AND image IS NOT NULL AND image != ''
             """
         ).fetchone()[0]
 
@@ -1082,11 +998,7 @@ def update():
 
 @app.get("/api/status")
 def status():
-    return jsonify(
-        {
-            "running": update_lock.locked(),
-        }
-    )
+    return jsonify({"running": update_lock.locked()})
 
 
 if __name__ == "__main__":
@@ -1097,12 +1009,7 @@ if __name__ == "__main__":
         daemon=True,
     ).start()
 
-    port = int(
-        os.environ.get(
-            "PORT",
-            "10000",
-        )
-    )
+    port = int(os.environ.get("PORT", "10000"))
 
     serve(
         app,
