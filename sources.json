@@ -1,12 +1,7 @@
 [
   {
     "name": "Porima 3D",
-    "url": "https://porima3d.com",
-    "enabled": true
-  },
-  {
-    "name": "Senin Fabrikan",
-    "url": "https://seninfabrikan.com",
+    "url": "https://porima3d.com/collections/filamentler",
     "enabled": true
   }
 ]
