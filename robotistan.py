@@ -5,10 +5,8 @@ from bs4 import BeautifulSoup
 from datetime import datetime
 from pathlib import Path
 
-# Veritabanı Yolu (app.py ile tam aynı veritabanını kullanır)
 DB_PATH = Path(__file__).resolve().parent / "data" / "filaments_v9.db"
 
-# Engellenecek Parça / Aksesuar Terimleri
 EXCLUDE_TERMS = [
     "nozzle", "hotend", "extruder", "kurutucu", "dryer", "dry box", "vakum", "poşet",
     "reçine", "resin", "3d kalem", "spatula", "sprey", "rulman", "soğutucu", "fan",
@@ -96,50 +94,47 @@ def detect_brand(name: str) -> str:
     return "Robotistan"
 
 def scrape_robotistan():
-    print(">>> [Robotistan] Tarama Doğru URL İle Başlatıldı...", flush=True)
+    print(">>> [Robotistan] Detaylı Tarama Başlatıldı...", flush=True)
     
     session = requests.Session()
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
-        'Accept-Language': 'tr-TR,tr;q=0.9'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Referer': 'https://www.robotistan.com/'
     }
 
     base_url = "https://www.robotistan.com"
     items = []
 
-    # Doğru Robotistan Kategori URL Yapısı: /3d-filament
-    for page in range(1, 8):
+    for page in range(1, 15):
         target_url = f"{base_url}/3d-filament?sayfa={page}"
         try:
             res = session.get(target_url, headers=headers, timeout=15)
             if res.status_code != 200:
-                print(f"[{target_url}] Yanıt Kodu: {res.status_code}")
                 break
 
             soup = BeautifulSoup(res.text, "html.parser")
             
-            # Ürün Kartlarını Yakala
-            cards = soup.select(".product-item, .showProductScheme, .productItem, .productDetail")
+            # Robotistan HTML Yapısında Tüm Ürün Detay Elemanlarını Yakala
+            cards = soup.select(".product-item, .showProductScheme, .productItem, [class*='product-box']")
             if not cards:
                 cards = soup.find_all("div", class_=lambda c: c and "product" in str(c).lower())
 
             if not cards:
-                print(f"[{page}. Sayfa] Ürün kartı bulunamadı veya sayfa sonuna gelindi.")
                 break
 
+            found_in_page = 0
             for card in cards:
-                title_elem = card.select_one(".product-title, .productName, h3, a.title, .p-name")
+                title_elem = card.select_one(".product-title, .productName, h3, a.title, .p-name, [class*='title']")
                 link_elem = card.find("a", href=True)
-                price_elem = card.select_one(".product-price, .current-price, .price, .p-price")
-                img_elem = card.find("img")
-
+                price_elem = card.select_one(".product-price, .current-price, .price, .p-price, [class*='price']")
+                
                 if not title_elem or not link_elem:
                     continue
 
                 title = title_elem.get_text(strip=True)
                 title_lower = title.lower()
 
-                # Parça / aksesuar engelleme
                 if any(term in title_lower for term in EXCLUDE_TERMS):
                     continue
 
@@ -154,9 +149,16 @@ def scrape_robotistan():
                 if price <= 0:
                     continue
 
+                # Görsel Tespiti (Hotlink engeline takılmayan orijinal resmi alma)
                 img_url = ""
+                img_elem = card.find("img")
                 if img_elem:
-                    img_url = img_elem.get("data-src") or img_elem.get("src") or ""
+                    img_url = (
+                        img_elem.get("data-original") or 
+                        img_elem.get("data-src") or 
+                        img_elem.get("data-lazy") or 
+                        img_elem.get("src") or ""
+                    )
                     if img_url.startswith("//"):
                         img_url = "https:" + img_url
                     elif img_url and not img_url.startswith("http"):
@@ -176,12 +178,15 @@ def scrape_robotistan():
                     "url": prod_url,
                     "image": img_url
                 })
+                found_in_page += 1
+
+            if found_in_page == 0:
+                break
 
         except Exception as e:
-            print(f"Hata ({target_url}): {e}")
+            print(f"Robotistan Hata ({target_url}): {e}")
             break
 
-    # Veritabanına Kaydet
     init_db()
     saved_count = 0
     now = datetime.now().isoformat(timespec="seconds")
@@ -193,7 +198,7 @@ def scrape_robotistan():
                 INSERT INTO products(source, external_id, name, brand, material, color, weight_g, price, old_price, in_stock, url, image, updated_at)
                 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(source, url) DO UPDATE SET 
-                price=excluded.price, in_stock=excluded.in_stock, color=excluded.color, image=excluded.image, updated_at=excluded.updated_at
+                price=excluded.price, image=excluded.image, in_stock=excluded.in_stock, color=excluded.color, updated_at=excluded.updated_at
             """, (
                 item["source"], item["external_id"], item["name"], item["brand"],
                 item["material"], item["color"], item["weight_g"], item["price"],
@@ -205,8 +210,7 @@ def scrape_robotistan():
 
     conn.commit()
     conn.close()
-    
-    print(f">>> [Robotistan] Tamamlandı! Toplam {saved_count} ürün veritabanına eklendi/güncellendi.", flush=True)
+    print(f">>> [Robotistan] Tamamlandı! Toplam {saved_count} ürün eklendi/güncellendi.", flush=True)
 
 if __name__ == "__main__":
     scrape_robotistan()
