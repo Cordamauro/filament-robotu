@@ -68,20 +68,6 @@ COLOR_MAPPING = [
     (r"bej|beige", "Bej")
 ]
 
-COLOR_ALIASES = {
-    "sarı": ["sari", "yellow"],
-    "kırmızı": ["kirmizi", "red", "mercan"],
-    "beyaz": ["beyaz", "white", "ral9003"],
-    "siyah": ["siyah", "black"],
-    "mavi": ["mavi", "blue", "lacivert", "navy", "bebek mavisi"],
-    "yeşil": ["yesil", "green", "haki", "matcha", "su yeşili"],
-    "pembe": ["pembe", "pink"],
-    "gümüş": ["gumus", "silver"],
-    "altın": ["altin", "gold"],
-    "somon": ["somon", "salmon"],
-    "şeffaf": ["seffaf", "transparent", "clear", "natural", "naturel"]
-}
-
 MATERIAL_PATTERNS = [
     ("PETG-CF", r"\bPETG[- ]?CF\b"),
     ("PET-CF", r"\bPET[- ]?CF\d*\b"),
@@ -107,7 +93,7 @@ EXCLUDE_TERMS = [
 
 KNOWN_BRANDS = [
     "Microzey", "Porima", "Filamix", "Beta Filament", "R3D", "Creality", "Anycubic", 
-    "Sunlu", "eSUN", "Polymaker", "Elegoo", "Spectrum", "Formfutura", "Bambu Lab"
+    "Sunlu", "eSUN", "Polymaker", "Elegoo", "Spectrum", "Formfutura", "Bambu Lab", "Fibromast", "Robotistan"
 ]
 
 
@@ -191,7 +177,7 @@ def save_products(items: list[dict]) -> int:
                 conn.execute("""INSERT INTO products(source, external_id, name, brand, material, color, weight_g, price, old_price, in_stock, url, image, updated_at)
                   VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                   ON CONFLICT(source, url) DO UPDATE SET 
-                  price=excluded.price, image=excluded.image, in_stock=excluded.in_stock, color=excluded.color, updated_at=excluded.updated_at""", 
+                  price=excluded.price, image=excluded.image, in_stock=excluded.in_stock, color=excluded.color, brand=excluded.brand, updated_at=excluded.updated_at""", 
                   (p.get("source"), str(p.get("external_id", "")), name, meta["brand"], meta["material"], meta["color"], meta["weight_g"], price, p.get("old_price"), 1, product_url, image_url, now))
                 saved += 1
             except Exception:
@@ -209,14 +195,12 @@ def scrape_shopify(source: dict) -> list[dict]:
         'Accept': 'application/json, text/plain, */*'
     })
 
-    raw_url = source["url"].rstrip("/")
-    base_url = raw_url.split("/collections")[0]
-
-    # Porima için tam koleksiyon adresinin doğru oluştuğundan emin olunur
-    json_endpoint = f"{raw_url}/products.json" if "/collections/" in raw_url else f"{base_url}/products.json"
+    endpoint = source["url"]
+    base_url = endpoint.split("/collections")[0]
 
     while page <= 10:
-        req_url = f"{json_endpoint}?page={page}&limit=250"
+        sep = "&" if "?" in endpoint else "?"
+        req_url = f"{endpoint}{sep}page={page}&limit=250"
         try:
             res = session.get(req_url, timeout=15)
             if res.status_code != 200: 
