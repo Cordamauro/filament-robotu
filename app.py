@@ -274,7 +274,6 @@ def save_items(items: list[dict]) -> int:
             price = product.get("price")
             image = product.get("image", "").strip()
 
-            # STOKSUZ, RESİMSİZ VEYA RESMİ KIRIK ÜRÜNLER KESİNLİKLE KAYDEDİLEMEZ!
             if (
                 not name
                 or price is None
@@ -693,6 +692,7 @@ def fetch_3dcim() -> list[dict]:
 
     base_url = "https://www.3dcim.com"
 
+    # 3dcim üzerindeki tüm filament serileri ve varyant kategori sayfaları
     categories = [
         "/3d-yazici-filament-cesitleri",
         "/pla-filamentler",
@@ -704,12 +704,13 @@ def fetch_3dcim() -> list[dict]:
     ]
 
     for cat_path in categories:
+        # Sayfa başına ürün limitini aşmamak için sayfalar temiz şekilde gezilir (srt=1 olmadan)
         for page_number in range(1, 20):
             try:
                 if page_number == 1:
-                    page_url = f"{base_url}{cat_path}?srt=1"
+                    page_url = f"{base_url}{cat_path}"
                 else:
-                    page_url = f"{base_url}{cat_path}?pg={page_number}&srt=1"
+                    page_url = f"{base_url}{cat_path}?pg={page_number}"
 
                 response = session.get(page_url, timeout=20)
 
@@ -731,19 +732,14 @@ def fetch_3dcim() -> list[dict]:
                     card_html = str(card).lower()
                     card_text = card.get_text(" ", strip=True).lower()
 
-                    # 1. KATI STOK KONTROLÜ: Yazı veya CSS ile stoksuz tespiti
+                    # Kesin Stoksuz Kontrolü: Yalnızca stoksuzluk yazanlar elenir
                     if (
                         "stokta yok" in card_text
                         or "tükendi" in card_text
                         or "out-of-stock" in card_html
                         or "stoktayok" in card_html
-                        or card.select_one(".out-of-stock, .stokYok, .sold-out, .tukenText")
+                        or card.select_one(".out-of-stock, .stokYok, .sold-out")
                     ):
-                        continue
-
-                    # 2. SATIN ALMA BUTONU KONTROLÜ: Sepete Ekle / Detay Butonu Yoksa STOKSUZDUR!
-                    buy_button = card.select_one(".btnSepeteEkle, .myBasketBtn, [class*='basket'], [class*='Basket']")
-                    if not buy_button and "sepete ekle" not in card_text:
                         continue
 
                     title_element = card.select_one(
@@ -795,7 +791,6 @@ def fetch_3dcim() -> list[dict]:
                             or ""
                         ).strip()
 
-                        # 3. KATI RESİM KONTROLÜ: Resim yoksa veya yüklenmemişse KESİNLİKLE STOKSUZDUR!
                         if (
                             raw_image 
                             and not raw_image.endswith(".svg") 
@@ -811,7 +806,7 @@ def fetch_3dcim() -> list[dict]:
 
                             image_url = f"https://wsrv.nl/?url={full_img_url}"
 
-                    # Resmi tam çekilemeyen hiçbir ürünü alma!
+                    # Resmi boş olan ürünler stoksuz varsayılıp atlanır
                     if not image_url:
                         continue
 
@@ -888,7 +883,7 @@ def run_update():
             tcim_count = save_items(tcim_items)
             print(f"[3dcim] -> {tcim_count} benzersiz ürün kaydedildi.", flush=True)
 
-        # Veritabanında resimsiz/bozuk kalmış eski stoksuz verileri tamamen temizle!
+        # Veritabanında resimsiz/bozuk kalmış eski verileri temizle
         with db() as connection:
             connection.execute("DELETE FROM products WHERE image IS NULL OR image = '' OR image LIKE '%blank%'")
 
