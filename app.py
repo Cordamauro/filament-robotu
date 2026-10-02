@@ -72,6 +72,10 @@ MATERIAL_PATTERNS = [
 
 
 EXCLUDE_TERMS = [
+    "hub",
+    "connector",
+    "dağıtıcı",
+    "dagitici",
     "cutter",
     "tube",
     "replacement",
@@ -690,7 +694,6 @@ def run_update():
                     """,
                     (f"%{term.casefold()}%",),
                 )
-            # Eski 3dcim verilerini veritabanından tamamen temizle
             connection.execute("DELETE FROM products WHERE source = '3dcim'")
 
         # 1. Porima Taraması
