@@ -4,6 +4,7 @@ import os
 import re
 import sqlite3
 import threading
+import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urljoin
@@ -489,12 +490,12 @@ def fetch_robotistan() -> list[dict]:
         }
     )
 
-    base_url = "https://www.filamentmarketim.com"
+    base_url = "https://www.robotistan.com"
 
     for page_number in range(1, 101):
         try:
             page_url = (
-                f"https://www.robotistan.com/3d-filament?pg={page_number}"
+                f"{base_url}/3d-filament?pg={page_number}"
             )
 
             response = session.get(page_url, timeout=25)
@@ -573,7 +574,7 @@ def fetch_robotistan() -> list[dict]:
                 if not raw_url:
                     continue
 
-                product_url = urljoin("https://www.robotistan.com", raw_url)
+                product_url = urljoin(base_url, raw_url)
                 normalized_url = product_url.split("?")[0].rstrip("/")
 
                 if normalized_url in seen_urls:
@@ -618,7 +619,7 @@ def fetch_robotistan() -> list[dict]:
                         elif raw_image.startswith("http"):
                             full_img_url = raw_image
                         else:
-                            full_img_url = urljoin("https://www.robotistan.com", raw_image)
+                            full_img_url = urljoin(base_url, raw_image)
 
                         image_url = f"https://wsrv.nl/?url={full_img_url}"
 
@@ -675,7 +676,7 @@ def fetch_robotistan() -> list[dict]:
     return items
 
 
-# GERÇEK KATEGORİ HARİTASI İLE TAM FİLAMENT MARKETİM SCRAPER'I
+# SITEMAP İLE GARANTİLİ FİLAMENT MARKETİM SCRAPER'I
 def fetch_filamentmarketim() -> list[dict]:
     items = []
     seen_urls = set()
@@ -683,50 +684,93 @@ def fetch_filamentmarketim() -> list[dict]:
 
     session.headers.update(
         {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/128.0.0.0 Safari/537.36"
-            ),
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0 Safari/537.36",
+            "Accept": "text/xml, application/xml, text/html, */*",
         }
     )
 
     base_url = "https://www.filamentmarketim.com"
-    
-    # Filament Marketim'in İdeasoft üzerindeki gerçek kategori adresleri
-    target_categories = [
-        "/pla-filament",
-        "/petg-filament",
-        "/abs-filament",
-        "/tpu-flex-filament",
-        "/3d-yazici-filamentleri",
-    ]
+    sitemap_url = f"{base_url}/sitemap.xml"
 
-    for cat in target_categories:
-        for page_number in range(1, 15):
-            try:
-                if page_number == 1:
-                    page_url = f"{base_url}{cat}"
-                else:
-                    page_url = f"{base_url}{cat}?tp={page_number}"
+    product_urls = set()
 
-                res = session.get(page_url, timeout=20)
-                if res.status_code != 200:
-                    break
+    try:
+        res = session.get(sitemap_url, timeout=15)
+        if res.status_code == 200:
+            urls = re.findall(r'<loc>(https?://www\.filamentmarketim\.com/[^<]+)</loc>', res.text)
+            for u in urls:
+                u_lower = u.lower()
+                if "filament" in u_lower and not u_lower.endswith(".xml") and not "/kategori" in u_lower:
+                    product_urls.add(u)
 
-                soup = BeautifulSoup(res.text, "html.parser")
-                cards = soup.select(
-                    ".product-item, .productItem, .showProductScheme, "
-                    "[class*='product-box'], .p-card, .product-detail-card"
-                )
+            print(f"[Filament Marketim] Sitemap'ten {len(product_urls)} potansiyel ürün bağlantısı bulundu.", flush=True)
+    except Exception as e:
+        print(f"[Filament Marketim] Sitemap çekme hatası: {e}", flush=True)
 
-                if not cards:
-                    break
+    # Eğer sitemap yöntemi bulunamazsa standart ürün arama uçlarına git
+    if not product_urls:
+        product_urls = {
+            f"{base_url}/pla-filament",
+            f"{base_url}/petg-filament",
+            f"{base_url}/abs-filament",
+            f"{base_url}/tpu-flex-filament",
+        }
 
-                new_on_page = 0
+    for p_url in list(product_urls)[:250]:
+        try:
+            r = session.get(p_url, timeout=12)
+            if r.status_code != 200:
+                continue
 
+            soup = BeautifulSoup(r.text, "html.parser")
+            
+            # Detay sayfası mı yoksa liste sayfası mı?
+            cards = soup.select(".product-item, .productItem, .showProductScheme, [class*='product-box']")
+            
+            if not cards:
+                # Detay Sayfası
+                page_text = soup.get_text(" ", strip=True).lower()
+                if "tükendi" in page_text or "stokta yok" in page_text:
+                    continue
+
+                title_el = soup.select_one("h1, .product-name, .productTitle")
+                price_el = soup.select_one(".product-price, .current-price, .price, .p-price")
+                img_el = soup.select_one(".product-image img, #imgUrunResmi, img[data-src]")
+
+                if not title_el or not price_el:
+                    continue
+
+                title = title_el.get_text(" ", strip=True)
+                price = clean_price(price_el.get_text(" ", strip=True))
+                norm_url = p_url.split("?")[0].rstrip("/")
+
+                if not price or price <= 0 or norm_url in seen_urls or not is_valid(title):
+                    continue
+
+                img_url = ""
+                if img_el:
+                    raw_img = img_el.get("data-src") or img_el.get("src") or ""
+                    if raw_img and "blank" not in raw_img.lower():
+                        if raw_img.startswith("//"): raw_img = "https:" + raw_img
+                        elif not raw_img.startswith("http"): raw_img = urljoin(base_url, raw_img)
+                        img_url = f"https://wsrv.nl/?url={raw_img}"
+
+                if not img_url:
+                    continue
+
+                seen_urls.add(norm_url)
+                items.append({
+                    "source": "Filament Marketim",
+                    "external_id": norm_url.split("/")[-1],
+                    "name": title,
+                    "price": price,
+                    "old_price": None,
+                    "in_stock": 1,
+                    "weight_g": 1000,
+                    "url": p_url,
+                    "image": img_url,
+                })
+            else:
                 for card in cards:
                     card_text = card.get_text(" ", strip=True).lower()
                     if "tükendi" in card_text or "stokta yok" in card_text:
@@ -751,60 +795,45 @@ def fetch_filamentmarketim() -> list[dict]:
                     if not raw_href:
                         continue
 
-                    product_url = urljoin(base_url, raw_href)
-                    normalized_url = product_url.split("?")[0].rstrip("/")
+                    full_product_url = urljoin(base_url, raw_href)
+                    norm_url = full_product_url.split("?")[0].rstrip("/")
 
-                    if normalized_url in seen_urls:
+                    if norm_url in seen_urls:
                         continue
 
-                    image_element = card.find("img")
-                    image_url = ""
-
-                    if image_element:
-                        raw_image = (
-                            image_element.get("data-original")
-                            or image_element.get("data-src")
-                            or image_element.get("data-lazy")
-                            or image_element.get("src")
+                    img_el = card.find("img")
+                    img_url = ""
+                    if img_el:
+                        raw_img = (
+                            img_el.get("data-original")
+                            or img_el.get("data-src")
+                            or img_el.get("src")
                             or ""
                         ).strip()
 
-                        if raw_image and "blank" not in raw_image.lower():
-                            if raw_image.startswith("//"):
-                                full_img_url = "https:" + raw_image
-                            elif raw_image.startswith("http"):
-                                full_img_url = raw_image
-                            else:
-                                full_img_url = urljoin(base_url, raw_image)
+                        if raw_img and "blank" not in raw_img.lower():
+                            if raw_img.startswith("//"): raw_img = "https:" + raw_img
+                            elif not raw_img.startswith("http"): raw_img = urljoin(base_url, raw_img)
+                            img_url = f"https://wsrv.nl/?url={raw_img}"
 
-                            image_url = f"https://wsrv.nl/?url={full_img_url}"
-
-                    if not image_url:
+                    if not img_url:
                         continue
 
-                    seen_urls.add(normalized_url)
+                    seen_urls.add(norm_url)
+                    items.append({
+                        "source": "Filament Marketim",
+                        "external_id": norm_url.split("/")[-1],
+                        "name": title,
+                        "price": price,
+                        "old_price": None,
+                        "in_stock": 1,
+                        "weight_g": 1000,
+                        "url": full_product_url,
+                        "image": img_url,
+                    })
 
-                    items.append(
-                        {
-                            "source": "Filament Marketim",
-                            "external_id": normalized_url.rstrip("/").split("/")[-1],
-                            "name": title,
-                            "price": price,
-                            "old_price": None,
-                            "in_stock": 1,
-                            "weight_g": 1000,
-                            "url": product_url,
-                            "image": image_url,
-                        }
-                    )
-                    new_on_page += 1
-
-                if new_on_page == 0:
-                    break
-
-            except Exception as error:
-                print(f"[Filament Marketim] Kategori {cat} Sayfa {page_number} hatası: {error}", flush=True)
-                break
+        except Exception:
+            continue
 
     print(f"[Filament Marketim] Toplam {len(items)} stoklu filament bulundu.", flush=True)
     return items
