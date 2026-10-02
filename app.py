@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import json
 import os
 import re
-import json
 import sqlite3
 import threading
 from datetime import datetime
@@ -11,9 +11,9 @@ from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
+from curl_cffi import requests as curl_requests
 from flask import Flask, jsonify, render_template, request
 from waitress import serve
-from curl_cffi import requests as curl_requests
 
 
 def data_dir() -> Path:
@@ -673,7 +673,6 @@ def fetch_robotistan() -> list[dict]:
     return items
 
 
-# CLOUDFLARE VE TİCİMAX ENGELİNİ %100 AŞAN KESİN 3DCİM SCRAPER'I (curl_cffi)
 def fetch_3dcim() -> list[dict]:
     items = []
     seen_urls = set()
@@ -695,10 +694,10 @@ def fetch_3dcim() -> list[dict]:
             try:
                 url = f"{base_url}{cat}?pg={pg}"
 
-                # Standart requests yerine Cloudflare TLS JA3 engelini kıran impersonate kullanılıyor
+                # impersonate="chrome" olarak güncellendi (versiyon çakışmasını engeller)
                 response = curl_requests.get(
                     url,
-                    impersonate="chrome128",
+                    impersonate="chrome",
                     timeout=20,
                     headers={
                         "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
@@ -711,7 +710,7 @@ def fetch_3dcim() -> list[dict]:
 
                 html_content = response.text
 
-                # 1. YÖNTEM: Ticimax JS/JSON Objesi Çekme (Beton Gri ve tüm renk seçeneklerini yakalar)
+                # 1. YÖNTEM: Ticimax JS/JSON Objesi Çekme (Beton Gri dahil tüm varyantları yakalar)
                 json_matches = (
                     re.findall(
                         r'var\040ProductList\s*=\s*(\[.*?\]);',
@@ -793,7 +792,7 @@ def fetch_3dcim() -> list[dict]:
                     except Exception:
                         pass
 
-                # 2. YÖNTEM: HTML Ayrıştırma (Sadece Stoklu ve Resmi Tam Olanlar)
+                # 2. YÖNTEM: HTML Kart Ayrıştırma
                 soup = BeautifulSoup(html_content, "html.parser")
                 cards = soup.select(
                     ".product-item, .productItem, .ItemOrj,"
@@ -970,7 +969,6 @@ def run_update():
                 flush=True,
             )
 
-        # Veritabanında resimsiz/bozuk kalmış eski verileri temizle
         with db() as connection:
             connection.execute(
                 "DELETE FROM products WHERE image IS NULL OR image = ''"
