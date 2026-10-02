@@ -66,14 +66,16 @@ MATERIAL_PATTERNS = [
     ("PLA", r"\bPLA(?:\+|[- ]?PLUS|[- ]?PRO|[- ]?BASIC|[- ]?HS)?\b")
 ]
 
+# KESİNLİKLE ELENECEK CİHAZ VE YEDEK PARÇA TERİMLERİ
 EXCLUDE_TERMS = [
-    "cutter", "tube", "replacement", "print head", "kesici", "boru", "borusu",
+    "cutter", "tube", "replacement", "print head", "head", "kesici", "boru", "borusu",
     "yıkama", "kürleme", "tarayıcı", "tarayici", "lazer", "gravür", "gravur", "turntable",
     "makinesi", "makine", "bundle", "scan", "scanner", "wash", "cure", "laser", "engraver",
     "printer", "yazıcı", "yazici", "nozzle", "hotend", "extruder", "kurutucu", "dryer", 
     "dry box", "vakum", "poşet", "reçine", "resin", "3d kalem", "spatula", "sprey", "rulman", 
     "soğutucu", "fan", "step motor", "baskı tablası", "peı", "tabla", "sensör", "somun", 
-    "vida", "kayış", "kasnak", "fişek", "ısıtıcı", "termistör", "yapıştırıcı", "modül", "kart"
+    "vida", "kayış", "kasnak", "fişek", "ısıtıcı", "termistör", "yapıştırıcı", "modül", "kart",
+    "baskı kafası", "tabla", "yay", "sürücü", "güç kaynağı", "adaptör", "kablo"
 ]
 
 KNOWN_BRANDS = [
@@ -83,7 +85,7 @@ KNOWN_BRANDS = [
 
 
 def db() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH, timeout=30.0)
+    conn = sqlite3.connect(DB_PATH, timeout=60.0)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -110,9 +112,20 @@ def clean_price(val) -> float | None:
 
 def is_valid(name: str) -> bool:
     n_lower = name.lower()
+    
+    # 1. Cihaz/aksesuar geçiyorsa direkt reddet
     if any(t in n_lower for t in EXCLUDE_TERMS):
         return False
-    return True
+
+    # 2. Ürün adında filament ibaresi veya malzeme kalıbı olmalı
+    if "filament" in n_lower or "filaman" in n_lower or "1.75" in n_lower or "1,75" in n_lower:
+        return True
+
+    for _, pattern in MATERIAL_PATTERNS:
+        if re.search(pattern, name, re.I):
+            return True
+
+    return False
 
 
 def detect_color(name: str) -> str:
@@ -148,7 +161,6 @@ def save_items(items: list[dict]) -> int:
             if not name or not price or price <= 0 or not is_valid(name):
                 continue
 
-            # Kaynak (Mağaza Adı) kesinlikle kaynak olarak yazılmalı!
             source = p.get("source", "").strip()
             brand = detect_brand(name, source)
             material = detect_material(name)
@@ -260,8 +272,6 @@ def fetch_robotistan() -> list[dict]:
                         if raw_img.startswith("//"): raw_img = "https:" + raw_img
                         elif raw_img and not raw_img.startswith("http"): raw_img = base_url + ("/" + raw_img.lstrip("/"))
 
-                    img_url = f"https://wsrv.nl/?url={raw_img}" if raw_img else ""
-
                     items.append({
                         "source": "Robotistan",
                         "external_id": prod_url.rstrip("/").split("/")[-1],
@@ -269,7 +279,7 @@ def fetch_robotistan() -> list[dict]:
                         "price": price,
                         "old_price": None,
                         "url": prod_url,
-                        "image": img_url
+                        "image": raw_img
                     })
                     found += 1
             if found == 0: break
@@ -282,6 +292,11 @@ def run_update():
     if not update_lock.acquire(blocking=False): return
     print(">>> TARAMA BAŞLADI <<<", flush=True)
     try:
+        # Veritabanında kalan geçersiz cihaz ve aksesuarları temizle
+        with db() as conn:
+            for term in EXCLUDE_TERMS:
+                conn.execute("DELETE FROM products WHERE LOWER(name) LIKE ?", (f"%{term}%",))
+
         p_items = fetch_porima()
         p_c = save_items(p_items)
         print(f"[Porima 3D] -> {p_c} ürün eklendi.", flush=True)
@@ -304,11 +319,9 @@ def products():
     q = request.args.get("q", "").strip()
     filters, params = ["in_stock = 1"], []
     
-    # Mağaza (source) veya Marka (brand) filtreleri
     for field in ("brand", "material", "color", "source"):
         val = request.args.get(field, "").strip()
         if val:
-            # Porima 3D / Porima esnek eşleşmesi
             if field == "source" and "porima" in val.lower():
                 filters.append("LOWER(source) LIKE '%porima%'")
             elif field == "source" and "robotistan" in val.lower():
