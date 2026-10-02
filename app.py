@@ -448,9 +448,10 @@ def fetch_porima() -> list[dict]:
 
 def fetch_robotistan() -> list[dict]:
     items = []
-    seen_product_ids = set()
+    seen_urls = set()
 
     session = requests.Session()
+
     session.headers.update(
         {
             "User-Agent": (
@@ -468,140 +469,147 @@ def fetch_robotistan() -> list[dict]:
 
     base_url = "https://www.robotistan.com"
 
+    # Robotistan şu anda sayfa başına 32 ürün gösteriyor.
+    # 100 sayfa sınırı yaklaşık 3.200 ürün kapasitesi sağlar.
     for page_number in range(1, 101):
         try:
+            # Önemli: Robotistan "sayfa" değil "pg" kullanıyor.
             page_url = (
                 f"{base_url}/3d-filament?pg={page_number}"
             )
 
-            response = session.get(
-                page_url,
-                timeout=25,
-            )
+            response = session.get(page_url, timeout=25)
             response.raise_for_status()
 
-            # Robotistan UTF-8 gönderdiği hâlde bazen karakter
-            # bilgisini yanlış bildirebiliyor.
-            try:
-                page_html = response.content.decode("utf-8")
-            except UnicodeDecodeError:
-                page_html = response.text
-
-            # Robotistan ürünlerin gerçek bilgilerini sayfanın
-            # içinde PRODUCT_DATA olarak saklıyor.
-            raw_products = re.findall(
-                r"PRODUCT_DATA\.push\(JSON\.parse\("
-                r"'((?:\\.|[^'])*)'"
-                r"\)\);",
-                page_html,
+            soup = BeautifulSoup(
+                response.text,
+                "html.parser",
             )
 
-            if not raw_products:
+            cards = soup.select(
+                ".product-item, "
+                ".showProductScheme, "
+                ".productItem, "
+                "[class*='product-box']"
+            )
+
+            if not cards:
                 print(
                     f"[Robotistan] Sayfa {page_number}: "
-                    "ürün verisi bulunamadı.",
+                    "ürün kartı bulunamadı, tarama tamamlandı.",
                     flush=True,
                 )
                 break
 
-            new_product_count = 0
-            stocked_product_count = 0
+            new_products_on_page = 0
 
-            for raw_product in raw_products:
-                try:
-                    # Birinci json.loads JavaScript metninin dış
-                    # kaçışlarını açar; ikincisi ürünü sözlüğe çevirir.
-                    decoded_json = json.loads(
-                        '"' + raw_product + '"'
-                    )
-                    product = json.loads(decoded_json)
-
-                except (json.JSONDecodeError, TypeError):
-                    continue
-
-                product_id = str(
-                    product.get("id")
-                    or product.get("code")
-                    or product.get("url")
-                    or ""
-                ).strip()
-
-                if not product_id:
-                    continue
-
-                # Aynı ürün başka bir sayfada tekrar görünürse ekleme.
-                if product_id in seen_product_ids:
-                    continue
-
-                seen_product_ids.add(product_id)
-                new_product_count += 1
-
-                name = str(
-                    product.get("name") or ""
-                ).strip()
-
-                if not name or not is_valid(name):
-                    continue
-
-                # Gerçek stok miktarı.
-                try:
-                    quantity = float(
-                        product.get("quantity") or 0
-                    )
-                except (TypeError, ValueError):
-                    quantity = 0
-
-                # Stok miktarı sıfır veya daha düşükse ürünü alma.
-                if quantity <= 0:
-                    continue
-
-                price = clean_price(
-                    product.get("total_sale_price")
-                    or product.get("sale_price")
+            for card in cards:
+                title_element = card.select_one(
+                    ".product-title, "
+                    ".productName, "
+                    "h3, "
+                    "a.title, "
+                    ".p-name"
                 )
+
+                if not title_element:
+                    continue
+
+                title = title_element.get_text(
+                    " ",
+                    strip=True,
+                )
+
+                if not title or not is_valid(title):
+                    continue
+
+                # Önce ürün başlığına bağlı bağlantıyı almaya çalış.
+                if (
+                    title_element.name == "a"
+                    and title_element.get("href")
+                ):
+                    link_element = title_element
+                else:
+                    link_element = title_element.find(
+                        "a",
+                        href=True,
+                    )
+
+                # Başlıkta bağlantı yoksa ürün kartındaki bağlantıyı al.
+                if not link_element:
+                    link_element = card.select_one(
+                        "a.product-link[href], "
+                        "a[href*='filament'], "
+                        "a[href]"
+                    )
+
+                if not link_element:
+                    continue
+
+                raw_url = link_element.get("href", "").strip()
+
+                if not raw_url:
+                    continue
+
+                product_url = urljoin(base_url, raw_url)
+
+                # Takip parametrelerini kaldırarak benzersiz URL oluştur.
+                normalized_url = product_url.split("?")[0].rstrip("/")
+
+                if normalized_url in seen_urls:
+                    continue
+
+                price_element = card.select_one(
+                    ".product-price, "
+                    ".current-price, "
+                    ".price, "
+                    ".p-price"
+                )
+
+                price = None
+
+                if price_element:
+                    price = clean_price(
+                        price_element.get_text(
+                            " ",
+                            strip=True,
+                        )
+                    )
 
                 if price is None or price <= 0:
                     continue
 
-                old_price = clean_price(
-                    product.get("total_base_price")
-                )
+                image_element = card.find("img")
+                image_url = ""
 
-                if (
-                    old_price is not None
-                    and old_price <= price
-                ):
-                    old_price = None
+                if image_element:
+                    raw_image = (
+                        image_element.get("data-original")
+                        or image_element.get("data-src")
+                        or image_element.get("data-lazy")
+                        or image_element.get("src")
+                        or ""
+                    )
 
-                product_path = str(
-                    product.get("url") or ""
-                ).strip()
+                    if raw_image:
+                        image_url = urljoin(
+                            base_url,
+                            raw_image,
+                        )
 
-                if not product_path:
-                    continue
-
-                product_url = urljoin(
-                    base_url + "/",
-                    product_path,
-                )
-
-                image_path = str(
-                    product.get("image") or ""
-                ).strip()
-
-                image_url = (
-                    urljoin(base_url + "/", image_path)
-                    if image_path
-                    else ""
-                )
+                seen_urls.add(normalized_url)
 
                 items.append(
                     {
                         "source": "Robotistan",
-                        "external_id": product_id,
-                        "name": name,
+                        "external_id": (
+                            normalized_url
+                            .rstrip("/")
+                            .split("/")[-1]
+                        ),
+                        "name": title,
                         "price": price,
-                        "old_price": old_price,
+                        "old_price": None,
                         "in_stock": 1,
                         "weight_g": 1000,
                         "url": product_url,
@@ -609,17 +617,21 @@ def fetch_robotistan() -> list[dict]:
                     }
                 )
 
-                stocked_product_count += 1
+                new_products_on_page += 1
 
             print(
                 f"[Robotistan] Sayfa {page_number}: "
-                f"{new_product_count} ürün incelendi, "
-                f"{stocked_product_count} stokta.",
+                f"{new_products_on_page} yeni filament",
                 flush=True,
             )
 
-            # Son sayfadan sonra aynı ürünler veya boş veri dönerse dur.
-            if new_product_count == 0:
+            # Son sayfadan sonra aynı içerik dönerse döngüyü durdur.
+            if new_products_on_page == 0:
+                print(
+                    "[Robotistan] Yeni ürün kalmadı, "
+                    "tarama tamamlandı.",
+                    flush=True,
+                )
                 break
 
         except requests.RequestException as error:
@@ -632,11 +644,12 @@ def fetch_robotistan() -> list[dict]:
 
     print(
         f"[Robotistan] Toplam {len(items)} "
-        "stokta filament bulundu.",
+        "benzersiz filament bulundu.",
         flush=True,
     )
 
     return items
+
 
 def run_update():
     if not update_lock.acquire(blocking=False):
@@ -680,32 +693,34 @@ def run_update():
         robotistan_items = fetch_robotistan()
 
         if robotistan_items:
-    # Tarama başarılı olduktan sonra eski Robotistan
-    # kayıtlarını tamamen kaldır. Böylece tükenen ürünler kalmaz.
-    with db() as connection:
-        connection.execute(
-            """
-            DELETE FROM products
-            WHERE source = ?
-            """,
-            ("Robotistan",),
-        )
+            # Başarılı taramadan sonra eski Robotistan kayıtlarını sil.
+            # Böylece artık stokta olmayan ürünler listede kalmaz.
+            with db() as connection:
+                connection.execute(
+                    """
+                    DELETE FROM products
+                    WHERE source = ?
+                    """,
+                    ("Robotistan",),
+                )
 
-    robotistan_count = save_items(robotistan_items)
+            robotistan_count = save_items(
+                robotistan_items
+            )
 
-    print(
-        f"[Robotistan] -> "
-        f"{robotistan_count} stokta filament kaydedildi.",
-        flush=True,
-    )
-else:
-    # Robotistan geçici olarak erişilemezse mevcut kayıtları
-    # yanlışlıkla silmemek için eski liste korunur.
-    print(
-        "[Robotistan] Ürün alınamadı; "
-        "mevcut kayıtlar korundu.",
-        flush=True,
-    )
+            print(
+                f"[Robotistan] -> "
+                f"{robotistan_count} benzersiz ürün kaydedildi.",
+                flush=True,
+            )
+        else:
+            # Site geçici olarak erişilemezse eski kayıtları silme.
+            print(
+                "[Robotistan] Ürün bulunamadı; "
+                "mevcut kayıtlar korundu.",
+                flush=True,
+            )
+
         print(">>> TARAMA TAMAMLANDI <<<", flush=True)
 
     except Exception as error:
