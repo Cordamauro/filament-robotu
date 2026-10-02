@@ -66,11 +66,14 @@ MATERIAL_PATTERNS = [
     ("PLA", r"\bPLA(?:\+|[- ]?PLUS|[- ]?PRO|[- ]?BASIC|[- ]?HS)?\b")
 ]
 
+# Filament dışındaki cihaz ve aksesuarları engelleyen genişletilmiş filtre
 EXCLUDE_TERMS = [
-    "nozzle", "hotend", "extruder", "kurutucu", "dryer", "dry box", "vakum", "poşet",
-    "reçine", "resin", "3d kalem", "spatula", "sprey", "rulman", "soğutucu", "fan",
-    "step motor", "baskı tablası", "peı", "tabla", "sensör", "yazıcı", "printer",
-    "somun", "vida", "kayış", "kasnak", "fişek", "ısıtıcı", "termistör", "yapıştırıcı"
+    "yıkama", "kürleme", "tarayıcı", "tarayici", "lazer", "gravür", "gravur", "turntable",
+    "makinesi", "makine", "bundle", "scan", "scanner", "wash", "cure", "laser", "engraver",
+    "printer", "yazıcı", "yazici", "nozzle", "hotend", "extruder", "kurutucu", "dryer", 
+    "dry box", "vakum", "poşet", "reçine", "resin", "3d kalem", "spatula", "sprey", "rulman", 
+    "soğutucu", "fan", "step motor", "baskı tablası", "peı", "tabla", "sensör", "somun", 
+    "vida", "kayış", "kasnak", "fişek", "ısıtıcı", "termistör", "yapıştırıcı", "modül", "kart"
 ]
 
 KNOWN_BRANDS = [
@@ -107,7 +110,20 @@ def clean_price(val) -> float | None:
 
 def is_valid(name: str) -> bool:
     n_lower = name.lower()
-    return not any(t in n_lower for t in EXCLUDE_TERMS)
+    
+    # 1. Cihaz/aksesuar terimi geçiyorsa ele
+    if any(t in n_lower for t in EXCLUDE_TERMS):
+        return False
+        
+    # 2. İsmi filament mi veya tanımlı bir filament materyali içeriyor mu?
+    if "filament" in n_lower or "filaman" in n_lower:
+        return True
+        
+    for _, pattern in MATERIAL_PATTERNS:
+        if re.search(pattern, name, re.I):
+            return True
+            
+    return False
 
 
 def detect_color(name: str) -> str:
@@ -189,6 +205,9 @@ def fetch_porima() -> list[dict]:
                     v_title = v.get('title', '')
                     full_name = f"{title} {v_title if v_title != 'Default Title' else ''}"
                     
+                    if not is_valid(full_name):
+                        continue
+
                     price = clean_price(v.get("price"))
                     if price:
                         v_img = v.get("featured_image", {}).get("src") if v.get("featured_image") else def_img
@@ -234,6 +253,10 @@ def fetch_robotistan() -> list[dict]:
 
                 if not title_el or not link_el: continue
                 title = title_el.get_text(strip=True)
+                
+                if not is_valid(title):
+                    continue
+
                 price = clean_price(price_el.get_text(strip=True)) if price_el else None
 
                 if price and price > 0:
@@ -270,6 +293,11 @@ def run_update():
     if not update_lock.acquire(blocking=False): return
     print(">>> TARAMA BAŞLADI <<<", flush=True)
     try:
+        # Eski hatalı verileri veritabanından temizle
+        with db() as conn:
+            for term in EXCLUDE_TERMS:
+                conn.execute("DELETE FROM products WHERE LOWER(name) LIKE ?", (f"%{term}%",))
+        
         p_items = fetch_porima()
         p_c = save_items(p_items)
         print(f"[Porima 3D] -> {p_c} ürün eklendi.", flush=True)
