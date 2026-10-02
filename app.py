@@ -6,6 +6,7 @@ import sqlite3
 import threading
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
@@ -28,7 +29,9 @@ update_lock = threading.Lock()
 
 @app.after_request
 def disable_browser_cache(response):
-    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Cache-Control"] = (
+        "no-store, no-cache, must-revalidate, max-age=0"
+    )
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
     return response
@@ -48,8 +51,9 @@ COLOR_MAPPING = [
     (r"gri|grey|gray", "Gri"),
     (r"kırmızı|kirmizi|red|mercan", "Kırmızı"),
     (r"altın|gold|bronz", "Altın"),
-    (r"şeffaf|seffaf|clear|natural", "Şeffaf")
+    (r"şeffaf|seffaf|clear|natural", "Şeffaf"),
 ]
+
 
 MATERIAL_PATTERNS = [
     ("PETG-CF", r"\bPETG[- ]?CF\b"),
@@ -57,298 +61,674 @@ MATERIAL_PATTERNS = [
     ("PA-CF", r"\bPA\d*[- ]?CF\d*|NYLON[- ]?CF\d*"),
     ("PETG", r"\bPETG\b"),
     ("ABS", r"\bABS\b"),
-    ("PLA-CF", r"\bPLA[- ]?CF\b"), 
+    ("PLA-CF", r"\bPLA[- ]?CF\b"),
     ("ASA", r"\bASA\b"),
     ("TPU", r"\bTPU\d*(?:[- ]?HF)?\b"),
     ("PVA", r"\bPVA\b"),
     ("HIPS", r"\bHIPS\b"),
     ("PC", r"\bPC\b"),
-    ("PLA", r"\bPLA(?:\+|[- ]?PLUS|[- ]?PRO|[- ]?BASIC|[- ]?HS)?\b")
+    ("PLA", r"\bPLA(?:\+|[- ]?PLUS|[- ]?PRO|[- ]?BASIC|[- ]?HS)?\b"),
 ]
+
 
 EXCLUDE_TERMS = [
-    "cutter", "tube", "replacement", "print head", "head", "kesici", "boru", "borusu",
-    "yıkama", "kürleme", "tarayıcı", "tarayici", "lazer", "gravür", "gravur", "turntable",
-    "makinesi", "makine", "bundle", "scan", "scanner", "wash", "cure", "laser", "engraver",
-    "printer", "yazıcı", "yazici", "nozzle", "hotend", "extruder", "kurutucu", "dryer", 
-    "dry box", "vakum", "poşet", "reçine", "resin", "3d kalem", "spatula", "sprey", "rulman", 
-    "soğutucu", "fan", "step motor", "baskı tablası", "peı", "tabla", "sensör", "somun", 
-    "vida", "kayış", "kasnak", "fişek", "ısıtıcı", "termistör", "yapıştırıcı", "modül", "kart"
+    "cutter",
+    "tube",
+    "replacement",
+    "print head",
+    "head",
+    "kesici",
+    "boru",
+    "borusu",
+    "yıkama",
+    "kürleme",
+    "tarayıcı",
+    "tarayici",
+    "lazer",
+    "gravür",
+    "gravur",
+    "turntable",
+    "makinesi",
+    "makine",
+    "bundle",
+    "scan",
+    "scanner",
+    "wash",
+    "cure",
+    "laser",
+    "engraver",
+    "printer",
+    "yazıcı",
+    "yazici",
+    "nozzle",
+    "hotend",
+    "extruder",
+    "kurutucu",
+    "dryer",
+    "dry box",
+    "vakum",
+    "poşet",
+    "reçine",
+    "resin",
+    "3d kalem",
+    "spatula",
+    "sprey",
+    "rulman",
+    "soğutucu",
+    "fan",
+    "step motor",
+    "baskı tablası",
+    "peı",
+    "tabla",
+    "sensör",
+    "somun",
+    "vida",
+    "kayış",
+    "kasnak",
+    "fişek",
+    "ısıtıcı",
+    "termistör",
+    "yapıştırıcı",
+    "modül",
+    "kart",
+    "baskı kafası",
+    "yay",
+    "sürücü",
+    "güç kaynağı",
+    "adaptör",
+    "kablo",
 ]
 
+
 KNOWN_BRANDS = [
-    "Microzey", "Porima 3D", "Porima", "Filamix", "Beta Filament", "R3D", "Creality", "Anycubic", 
-    "Sunlu", "eSUN", "Polymaker", "Elegoo", "Spectrum", "Formfutura", "Bambu Lab", "Fibromast", "Robotistan"
+    "Microzey",
+    "Porima 3D",
+    "Porima",
+    "Filamix",
+    "Beta Filament",
+    "R3D",
+    "Creality",
+    "Anycubic",
+    "Sunlu",
+    "eSUN",
+    "Polymaker",
+    "Elegoo",
+    "Spectrum",
+    "Formfutura",
+    "Bambu Lab",
+    "Fibromast",
+    "Robotistan",
 ]
 
 
 def db() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH, timeout=60.0)
-    conn.row_factory = sqlite3.Row
-    return conn
+    connection = sqlite3.connect(DB_PATH, timeout=60.0)
+    connection.row_factory = sqlite3.Row
+    return connection
 
 
 def init_db() -> None:
-    with db() as conn:
-        conn.execute("""CREATE TABLE IF NOT EXISTS products (
-          id INTEGER PRIMARY KEY, source TEXT NOT NULL, external_id TEXT, name TEXT NOT NULL,
-          brand TEXT, material TEXT, color TEXT, weight_g INTEGER, price REAL, old_price REAL,
-          in_stock INTEGER DEFAULT 1, url TEXT NOT NULL, image TEXT, updated_at TEXT,
-          UNIQUE(source, url)
-        )""")
+    with db() as connection:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS products (
+                id INTEGER PRIMARY KEY,
+                source TEXT NOT NULL,
+                external_id TEXT,
+                name TEXT NOT NULL,
+                brand TEXT,
+                material TEXT,
+                color TEXT,
+                weight_g INTEGER,
+                price REAL,
+                old_price REAL,
+                in_stock INTEGER DEFAULT 1,
+                url TEXT NOT NULL,
+                image TEXT,
+                updated_at TEXT,
+                UNIQUE(source, url)
+            )
+            """
+        )
 
 
-def clean_price(val) -> float | None:
-    if not val: return None
-    txt = re.sub(r"[^\d,.]", "", str(val))
-    if not txt: return None
-    if "," in txt and "." in txt: txt = txt.replace(".", "").replace(",", ".")
-    elif "," in txt: txt = txt.replace(",", ".")
-    try: return float(txt)
-    except ValueError: return None
+def clean_price(value) -> float | None:
+    if value is None:
+        return None
+
+    text = re.sub(r"[^\d,.]", "", str(value))
+
+    if not text:
+        return None
+
+    if "," in text and "." in text:
+        text = text.replace(".", "").replace(",", ".")
+    elif "," in text:
+        text = text.replace(",", ".")
+
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def is_valid(name: str) -> bool:
+    name_lower = name.casefold()
+
+    if any(term.casefold() in name_lower for term in EXCLUDE_TERMS):
+        return False
+
+    if (
+        "filament" in name_lower
+        or "filaman" in name_lower
+        or "1.75" in name_lower
+        or "1,75" in name_lower
+    ):
+        return True
+
+    for _, pattern in MATERIAL_PATTERNS:
+        if re.search(pattern, name, re.IGNORECASE):
+            return True
+
+    return False
 
 
 def detect_color(name: str) -> str:
-    n_lower = name.lower()
-    for pattern, col in COLOR_MAPPING:
-        if re.search(pattern, n_lower, re.I):
-            return col
+    name_lower = name.casefold()
+
+    for pattern, color in COLOR_MAPPING:
+        if re.search(pattern, name_lower, re.IGNORECASE):
+            return color
+
     return "Mavi"
 
 
 def detect_material(name: str) -> str:
-    upper = name.upper()
     for label, pattern in MATERIAL_PATTERNS:
-        if re.search(pattern, upper, re.I):
+        if re.search(pattern, name, re.IGNORECASE):
             return label
+
     return "PLA"
 
 
 def detect_brand(name: str, fallback_source: str) -> str:
-    for b in KNOWN_BRANDS:
-        if b.lower() in name.lower():
-            return b
+    for brand in KNOWN_BRANDS:
+        if brand.casefold() in name.casefold():
+            return brand
+
     return fallback_source
 
 
-# PORİMA MANTIĞI VE FİLTRESİ
-def is_valid_porima(name: str) -> bool:
-    n_lower = name.lower()
-    if any(t in n_lower for t in EXCLUDE_TERMS):
-        return False
-    return True
+def save_items(items: list[dict]) -> int:
+    now = datetime.now().isoformat(timespec="seconds")
+    count = 0
+
+    with db() as connection:
+        for product in items:
+            name = product.get("name", "").strip()
+            price = product.get("price")
+
+            if (
+                not name
+                or price is None
+                or price <= 0
+                or not is_valid(name)
+            ):
+                continue
+
+            source = product.get("source", "").strip()
+            brand = detect_brand(name, source)
+            material = detect_material(name)
+            color = detect_color(name)
+
+            try:
+                connection.execute(
+                    """
+                    INSERT INTO products (
+                        source,
+                        external_id,
+                        name,
+                        brand,
+                        material,
+                        color,
+                        weight_g,
+                        price,
+                        old_price,
+                        in_stock,
+                        url,
+                        image,
+                        updated_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(source, url) DO UPDATE SET
+                        external_id = excluded.external_id,
+                        name = excluded.name,
+                        brand = excluded.brand,
+                        material = excluded.material,
+                        color = excluded.color,
+                        weight_g = excluded.weight_g,
+                        price = excluded.price,
+                        old_price = excluded.old_price,
+                        in_stock = excluded.in_stock,
+                        image = excluded.image,
+                        updated_at = excluded.updated_at
+                    """,
+                    (
+                        source,
+                        str(product.get("external_id", "")),
+                        name,
+                        brand,
+                        material,
+                        color,
+                        product.get("weight_g", 1000),
+                        price,
+                        product.get("old_price"),
+                        int(product.get("in_stock", 1)),
+                        product.get("url"),
+                        product.get("image", ""),
+                        now,
+                    ),
+                )
+
+                count += 1
+
+            except sqlite3.Error as error:
+                print(
+                    f"[Veritabanı] {name} kaydedilemedi: {error}",
+                    flush=True,
+                )
+
+    return count
 
 
 def fetch_porima() -> list[dict]:
     items = []
-    sess = requests.Session()
-    sess.headers.update({
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Accept': 'application/json'
-    })
+    session = requests.Session()
 
-    for p_num in range(1, 10):
-        url = f"https://porima3d.com/products.json?page={p_num}&limit=250"
+    session.headers.update(
+        {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            ),
+            "Accept": "application/json",
+        }
+    )
+
+    for page_number in range(1, 20):
+        url = (
+            "https://porima3d.com/products.json"
+            f"?page={page_number}&limit=250"
+        )
+
         try:
-            res = sess.get(url, timeout=10)
-            if res.status_code != 200: break
-            prods = res.json().get("products", [])
-            if not prods: break
+            response = session.get(url, timeout=20)
 
-            for p in prods:
-                title = p.get('title', '')
-                imgs = p.get("images") or []
-                def_img = imgs[0].get("src") if imgs else ""
+            if response.status_code != 200:
+                break
 
-                for v in p.get("variants", []):
-                    if not v.get("available"): continue
-                    v_title = v.get('title', '')
-                    full_name = f"{title} {v_title if v_title != 'Default Title' else ''}"
+            products = response.json().get("products", [])
 
-                    if not is_valid_porima(full_name):
+            if not products:
+                break
+
+            for product in products:
+                title = product.get("title", "").strip()
+                images = product.get("images") or []
+                default_image = images[0].get("src") if images else ""
+
+                for variant in product.get("variants", []):
+                    if not variant.get("available"):
                         continue
 
-                    price = clean_price(v.get("price"))
-                    if price:
-                        v_img = v.get("featured_image", {}).get("src") if v.get("featured_image") else def_img
-                        if v_img and v_img.startswith("//"): v_img = "https:" + v_img
+                    variant_title = variant.get("title", "").strip()
 
-                        items.append({
+                    full_name = title
+
+                    if (
+                        variant_title
+                        and variant_title.casefold() != "default title"
+                    ):
+                        full_name = f"{title} {variant_title}"
+
+                    if not is_valid(full_name):
+                        continue
+
+                    price = clean_price(variant.get("price"))
+
+                    if price is None or price <= 0:
+                        continue
+
+                    featured_image = variant.get("featured_image") or {}
+                    variant_image = (
+                        featured_image.get("src") or default_image
+                    )
+
+                    if (
+                        variant_image
+                        and variant_image.startswith("//")
+                    ):
+                        variant_image = "https:" + variant_image
+
+                    items.append(
+                        {
                             "source": "Porima 3D",
-                            "external_id": str(v.get("id")),
+                            "external_id": str(variant.get("id", "")),
                             "name": full_name,
                             "price": price,
-                            "old_price": clean_price(v.get("compare_at_price")),
-                            "url": f"https://porima3d.com/products/{p.get('handle')}?variant={v.get('id')}",
-                            "image": v_img
-                        })
-        except Exception:
+                            "old_price": clean_price(
+                                variant.get("compare_at_price")
+                            ),
+                            "in_stock": 1,
+                            "weight_g": 1000,
+                            "url": (
+                                "https://porima3d.com/products/"
+                                f"{product.get('handle')}"
+                                f"?variant={variant.get('id')}"
+                            ),
+                            "image": variant_image,
+                        }
+                    )
+
+        except (
+            requests.RequestException,
+            ValueError,
+            KeyError,
+        ) as error:
+            print(
+                f"[Porima 3D] Sayfa {page_number} alınamadı: "
+                f"{error}",
+                flush=True,
+            )
             break
+
     return items
 
 
-def save_porima_items(items: list[dict]) -> int:
-    now = datetime.now().isoformat(timespec="seconds")
-    count = 0
-    with db() as conn:
-        for p in items:
-            name = p.get("name", "").strip()
-            price = p.get("price")
-            if not name or not price or price <= 0:
-                continue
-
-            brand = detect_brand(name, "Porima 3D")
-            material = detect_material(name)
-            color = detect_color(name)
-            
-            try:
-                conn.execute("""
-                    INSERT INTO products(source, external_id, name, brand, material, color, weight_g, price, old_price, in_stock, url, image, updated_at)
-                    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(source, url) DO UPDATE SET 
-                    source=excluded.source, price=excluded.price, image=excluded.image, in_stock=1, color=excluded.color, brand=excluded.brand, updated_at=excluded.updated_at
-                """, (
-                    "Porima 3D", str(p.get("external_id", "")), name, brand, material, color, 1000,
-                    price, p.get("old_price"), 1, p.get("url"), p.get("image", ""), now
-                ))
-                count += 1
-            except Exception:
-                pass
-    return count
-
-
-# ROBOTİSTAN DİNAMİK PAGINATION DÜZELTMESİ (?pg= Parametresi)
-def is_valid_robotistan(name: str) -> bool:
-    n_lower = name.lower()
-    if any(t in n_lower for t in EXCLUDE_TERMS):
-        return False
-    return True
-
-
-def fetch_robotistan_memory() -> list[tuple]:
-    now = datetime.now().isoformat(timespec="seconds")
-    db_records = []
+def fetch_robotistan() -> list[dict]:
+    items = []
     seen_urls = set()
-    
-    sess = requests.Session()
-    sess.headers.update({
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-    })
+
+    session = requests.Session()
+
+    session.headers.update(
+        {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            ),
+            "Accept": (
+                "text/html,application/xhtml+xml,"
+                "application/xml;q=0.9,*/*;q=0.8"
+            ),
+            "Accept-Language": "tr-TR,tr;q=0.9,en;q=0.8",
+        }
+    )
 
     base_url = "https://www.robotistan.com"
-    
-    # Robotistan'ın güncel sayfalama parametreleri: pg ve sayfa kombinasyonları
-    for page in range(1, 30):
-        urls_to_try = [
-            f"{base_url}/3d-filament?pg={page}",
-            f"{base_url}/3d-filament?sayfa={page}"
-        ]
-        
-        page_items_found = 0
-        for target_url in urls_to_try:
-            try:
-                res = sess.get(target_url, timeout=10)
-                if res.status_code != 200: continue
 
-                soup = BeautifulSoup(res.text, "html.parser")
-                cards = soup.select(".product-item, .showProductScheme, .productItem, [class*='product-box'], .p-card")
-                if not cards: continue
+    # Robotistan şu anda sayfa başına 32 ürün gösteriyor.
+    # 100 sayfa sınırı yaklaşık 3.200 ürün kapasitesi sağlar.
+    for page_number in range(1, 101):
+        try:
+            # Önemli: Robotistan "sayfa" değil "pg" kullanıyor.
+            page_url = (
+                f"{base_url}/3d-filament?pg={page_number}"
+            )
 
-                for card in cards:
-                    title_el = card.select_one(".product-title, .productName, h3, a.title, .p-name")
-                    link_el = card.find("a", href=True)
-                    price_el = card.select_one(".product-price, .current-price, .price, .p-price")
+            response = session.get(page_url, timeout=25)
+            response.raise_for_status()
 
-                    if not title_el or not link_el: continue
-                    title = title_el.get_text(strip=True)
+            soup = BeautifulSoup(
+                response.text,
+                "html.parser",
+            )
 
-                    if not is_valid_robotistan(title):
-                        continue
+            cards = soup.select(
+                ".product-item, "
+                ".showProductScheme, "
+                ".productItem, "
+                "[class*='product-box']"
+            )
 
-                    prod_url = link_el["href"]
-                    if not prod_url.startswith("http"):
-                        prod_url = base_url + ("/" + prod_url.lstrip("/"))
+            if not cards:
+                print(
+                    f"[Robotistan] Sayfa {page_number}: "
+                    "ürün kartı bulunamadı, tarama tamamlandı.",
+                    flush=True,
+                )
+                break
 
-                    # Sayfaların aynı ürünleri döngüye sokmasını engeller
-                    if prod_url in seen_urls:
-                        continue
+            new_products_on_page = 0
 
-                    price = clean_price(price_el.get_text(strip=True)) if price_el else None
-                    if price and price > 0:
-                        img_el = card.find("img")
-                        raw_img = ""
-                        if img_el:
-                            raw_img = img_el.get("data-original") or img_el.get("data-src") or img_el.get("src") or ""
-                            if raw_img.startswith("//"): raw_img = "https:" + raw_img
-                            elif raw_img and not raw_img.startswith("http"): raw_img = base_url + ("/" + raw_img.lstrip("/"))
+            for card in cards:
+                title_element = card.select_one(
+                    ".product-title, "
+                    ".productName, "
+                    "h3, "
+                    "a.title, "
+                    ".p-name"
+                )
 
-                        ext_id = prod_url.rstrip("/").split("/")[-1]
-                        brand = detect_brand(title, "Robotistan")
-                        material = detect_material(title)
-                        color = detect_color(title)
+                if not title_element:
+                    continue
 
-                        db_records.append((
-                            "Robotistan", ext_id, title, brand, material, color, 1000,
-                            price, None, 1, prod_url, raw_img, now
-                        ))
-                        seen_urls.add(prod_url)
-                        page_items_found += 1
+                title = title_element.get_text(
+                    " ",
+                    strip=True,
+                )
 
-                if page_items_found > 0:
-                    break
-            except Exception:
-                continue
+                if not title or not is_valid(title):
+                    continue
 
-        if page_items_found == 0 and page > 1:
+                # Önce ürün başlığına bağlı bağlantıyı almaya çalış.
+                if (
+                    title_element.name == "a"
+                    and title_element.get("href")
+                ):
+                    link_element = title_element
+                else:
+                    link_element = title_element.find(
+                        "a",
+                        href=True,
+                    )
+
+                # Başlıkta bağlantı yoksa ürün kartındaki bağlantıyı al.
+                if not link_element:
+                    link_element = card.select_one(
+                        "a.product-link[href], "
+                        "a[href*='filament'], "
+                        "a[href]"
+                    )
+
+                if not link_element:
+                    continue
+
+                raw_url = link_element.get("href", "").strip()
+
+                if not raw_url:
+                    continue
+
+                product_url = urljoin(base_url, raw_url)
+
+                # Takip parametrelerini kaldırarak benzersiz URL oluştur.
+                normalized_url = product_url.split("?")[0].rstrip("/")
+
+                if normalized_url in seen_urls:
+                    continue
+
+                price_element = card.select_one(
+                    ".product-price, "
+                    ".current-price, "
+                    ".price, "
+                    ".p-price"
+                )
+
+                price = None
+
+                if price_element:
+                    price = clean_price(
+                        price_element.get_text(
+                            " ",
+                            strip=True,
+                        )
+                    )
+
+                if price is None or price <= 0:
+                    continue
+
+                image_element = card.find("img")
+                image_url = ""
+
+                if image_element:
+                    raw_image = (
+                        image_element.get("data-original")
+                        or image_element.get("data-src")
+                        or image_element.get("data-lazy")
+                        or image_element.get("src")
+                        or ""
+                    )
+
+                    if raw_image:
+                        image_url = urljoin(
+                            base_url,
+                            raw_image,
+                        )
+
+                seen_urls.add(normalized_url)
+
+                items.append(
+                    {
+                        "source": "Robotistan",
+                        "external_id": (
+                            normalized_url
+                            .rstrip("/")
+                            .split("/")[-1]
+                        ),
+                        "name": title,
+                        "price": price,
+                        "old_price": None,
+                        "in_stock": 1,
+                        "weight_g": 1000,
+                        "url": product_url,
+                        "image": image_url,
+                    }
+                )
+
+                new_products_on_page += 1
+
+            print(
+                f"[Robotistan] Sayfa {page_number}: "
+                f"{new_products_on_page} yeni filament",
+                flush=True,
+            )
+
+            # Son sayfadan sonra aynı içerik dönerse döngüyü durdur.
+            if new_products_on_page == 0:
+                print(
+                    "[Robotistan] Yeni ürün kalmadı, "
+                    "tarama tamamlandı.",
+                    flush=True,
+                )
+                break
+
+        except requests.RequestException as error:
+            print(
+                f"[Robotistan] Sayfa {page_number} alınamadı: "
+                f"{error}",
+                flush=True,
+            )
             break
 
-    return db_records
+    print(
+        f"[Robotistan] Toplam {len(items)} "
+        "benzersiz filament bulundu.",
+        flush=True,
+    )
 
-
-def save_robotistan_atomic(records: list[tuple]) -> int:
-    if not records:
-        return 0
-
-    with db() as conn:
-        conn.execute("BEGIN TRANSACTION")
-        conn.executemany("""
-            INSERT INTO products(source, external_id, name, brand, material, color, weight_g, price, old_price, in_stock, url, image, updated_at)
-            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(source, url) DO UPDATE SET 
-            source=excluded.source, price=excluded.price, image=excluded.image, in_stock=1, color=excluded.color, brand=excluded.brand, updated_at=excluded.updated_at
-        """, records)
-        conn.commit()
-
-    return len(records)
+    return items
 
 
 def run_update():
-    if not update_lock.acquire(blocking=False): return
+    if not update_lock.acquire(blocking=False):
+        print(
+            "Başka bir güncelleme zaten çalışıyor.",
+            flush=True,
+        )
+        return
+
     print(">>> TARAMA BAŞLADI <<<", flush=True)
+
     try:
-        # Veritabanında kalan geçersiz cihazları temizle
-        with db() as conn:
+        # Önceden kalmış aksesuar ve cihazları temizle.
+        with db() as connection:
             for term in EXCLUDE_TERMS:
-                conn.execute("DELETE FROM products WHERE LOWER(name) LIKE ?", (f"%{term}%",))
+                connection.execute(
+                    """
+                    DELETE FROM products
+                    WHERE LOWER(name) LIKE ?
+                    """,
+                    (f"%{term.casefold()}%",),
+                )
 
-        # 1. Porima Taraması (Dokunulmadı)
-        try:
-            p_items = fetch_porima()
-            p_c = save_porima_items(p_items)
-            print(f"[Porima 3D] -> {p_c} ürün eklendi.", flush=True)
-        except Exception as e:
-            print(f"[Porima 3D] Hata: {e}", flush=True)
+        porima_items = fetch_porima()
 
-        # 2. Robotistan Dinamik Sayfalama Taraması
-        try:
-            r_records = fetch_robotistan_memory()
-            r_c = save_robotistan_atomic(r_records)
-            print(f"[Robotistan] -> {r_c} benzersiz ürün eklendi.", flush=True)
-        except Exception as e:
-            print(f"[Robotistan] Hata: {e}", flush=True)
+        if porima_items:
+            porima_count = save_items(porima_items)
 
-        print(">>> TARAMA TAMAMLAMDI <<<", flush=True)
+            print(
+                f"[Porima 3D] -> "
+                f"{porima_count} ürün kaydedildi.",
+                flush=True,
+            )
+        else:
+            print(
+                "[Porima 3D] Ürün bulunamadı; "
+                "mevcut kayıtlar korundu.",
+                flush=True,
+            )
+
+        robotistan_items = fetch_robotistan()
+
+        if robotistan_items:
+            # Başarılı taramadan sonra eski Robotistan kayıtlarını sil.
+            # Böylece artık stokta olmayan ürünler listede kalmaz.
+            with db() as connection:
+                connection.execute(
+                    """
+                    DELETE FROM products
+                    WHERE source = ?
+                    """,
+                    ("Robotistan",),
+                )
+
+            robotistan_count = save_items(
+                robotistan_items
+            )
+
+            print(
+                f"[Robotistan] -> "
+                f"{robotistan_count} benzersiz ürün kaydedildi.",
+                flush=True,
+            )
+        else:
+            # Site geçici olarak erişilemezse eski kayıtları silme.
+            print(
+                "[Robotistan] Ürün bulunamadı; "
+                "mevcut kayıtlar korundu.",
+                flush=True,
+            )
+
+        print(">>> TARAMA TAMAMLANDI <<<", flush=True)
+
+    except Exception as error:
+        print(
+            f">>> GÜNCELLEME HATASI: {error} <<<",
+            flush=True,
+        )
+
     finally:
         update_lock.release()
 
@@ -360,49 +740,180 @@ def index():
 
 @app.get("/api/products")
 def products():
-    q = request.args.get("q", "").strip()
-    filters, params = ["in_stock = 1"], []
+    search_query = request.args.get(
+        "q",
+        "",
+    ).strip()
 
-    for field in ("brand", "material", "color", "source"):
-        val = request.args.get(field, "").strip()
-        if val:
-            if field == "source" and "porima" in val.lower():
-                filters.append("LOWER(source) LIKE '%porima%'")
-            elif field == "source" and "robotistan" in val.lower():
-                filters.append("LOWER(source) LIKE '%robotistan%'")
-            else:
-                filters.append(f"{field} = ?")
-                params.append(val)
+    filters = ["in_stock = 1"]
+    parameters = []
 
-    if q:
-        filters.append("(name LIKE ? OR brand LIKE ? OR material LIKE ?)")
-        params += [f"%{q}%"] * 3
+    for field in (
+        "brand",
+        "material",
+        "color",
+        "source",
+    ):
+        value = request.args.get(
+            field,
+            "",
+        ).strip()
 
-    sql = "SELECT *, CASE WHEN weight_g > 0 THEN price * 1000.0 / weight_g END AS kg_price FROM products WHERE " + " AND ".join(filters) + " ORDER BY price ASC LIMIT 1000"
+        if not value:
+            continue
 
-    with db() as conn:
-        rows = [dict(r) for r in conn.execute(sql, params)]
+        if (
+            field == "source"
+            and "porima" in value.casefold()
+        ):
+            filters.append(
+                "LOWER(source) LIKE '%porima%'"
+            )
+
+        elif (
+            field == "source"
+            and "robotistan" in value.casefold()
+        ):
+            filters.append(
+                "LOWER(source) LIKE '%robotistan%'"
+            )
+
+        else:
+            filters.append(f"{field} = ?")
+            parameters.append(value)
+
+    if search_query:
+        filters.append(
+            """
+            (
+                name LIKE ?
+                OR brand LIKE ?
+                OR material LIKE ?
+                OR color LIKE ?
+            )
+            """
+        )
+
+        query_value = f"%{search_query}%"
+        parameters.extend(
+            [
+                query_value,
+                query_value,
+                query_value,
+                query_value,
+            ]
+        )
+
+    sql = """
+        SELECT *,
+               CASE
+                   WHEN weight_g > 0
+                   THEN price * 1000.0 / weight_g
+               END AS kg_price
+        FROM products
+        WHERE {}
+        ORDER BY price ASC
+        LIMIT 5000
+    """.format(" AND ".join(filters))
+
+    with db() as connection:
+        rows = [
+            dict(row)
+            for row in connection.execute(
+                sql,
+                parameters,
+            )
+        ]
+
     return jsonify(rows)
 
 
 @app.get("/api/filters")
 def filters():
-    with db() as conn:
+    with db() as connection:
         values = {}
-        for field in ("brand", "material", "color", "source"):
-            sql = f"SELECT DISTINCT {field} FROM products WHERE {field} IS NOT NULL AND {field} != '' AND in_stock = 1 ORDER BY {field}"
-            values[field] = [row[0] for row in conn.execute(sql)]
+
+        for field in (
+            "brand",
+            "material",
+            "color",
+            "source",
+        ):
+            sql = f"""
+                SELECT DISTINCT {field}
+                FROM products
+                WHERE {field} IS NOT NULL
+                  AND {field} != ''
+                  AND in_stock = 1
+                ORDER BY {field}
+            """
+
+            values[field] = [
+                row[0]
+                for row in connection.execute(sql)
+            ]
+
+        values["count"] = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM products
+            WHERE in_stock = 1
+            """
+        ).fetchone()[0]
+
     return jsonify(values)
 
 
 @app.post("/api/update")
 def update():
-    threading.Thread(target=run_update, daemon=True).start()
-    return jsonify({"ok": True})
+    if update_lock.locked():
+        return jsonify(
+            {
+                "ok": False,
+                "message": "Güncelleme zaten çalışıyor.",
+            }
+        )
+
+    threading.Thread(
+        target=run_update,
+        daemon=True,
+    ).start()
+
+    return jsonify(
+        {
+            "ok": True,
+            "message": "Güncelleme başlatıldı.",
+        }
+    )
+
+
+@app.get("/api/status")
+def status():
+    return jsonify(
+        {
+            "running": update_lock.locked(),
+        }
+    )
 
 
 if __name__ == "__main__":
     init_db()
-    threading.Thread(target=run_update, daemon=True).start()
-    port = int(os.environ.get("PORT", 10000))
-    serve(app, host="0.0.0.0", port=port)
+
+    threading.Thread(
+        target=run_update,
+        daemon=True,
+    ).start()
+
+    port = int(
+        os.environ.get(
+            "PORT",
+            "10000",
+        )
+    )
+
+    serve(
+        app,
+        host="0.0.0.0",
+        port=port,
+        threads=8,
+    )
