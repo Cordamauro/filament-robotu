@@ -66,8 +66,9 @@ MATERIAL_PATTERNS = [
     ("PLA", r"\bPLA(?:\+|[- ]?PLUS|[- ]?PRO|[- ]?BASIC|[- ]?HS)?\b")
 ]
 
-# Filament dışındaki cihaz ve aksesuarları engelleyen genişletilmiş filtre
+# Kesici, Boru, Tüp, Bıçak vb. kesin olarak engellenen kelimeler
 EXCLUDE_TERMS = [
+    "cutter", "tube", "replacement", "print head", "head", "kesici", "boru", "borusu",
     "yıkama", "kürleme", "tarayıcı", "tarayici", "lazer", "gravür", "gravur", "turntable",
     "makinesi", "makine", "bundle", "scan", "scanner", "wash", "cure", "laser", "engraver",
     "printer", "yazıcı", "yazici", "nozzle", "hotend", "extruder", "kurutucu", "dryer", 
@@ -111,12 +112,12 @@ def clean_price(val) -> float | None:
 def is_valid(name: str) -> bool:
     n_lower = name.lower()
     
-    # 1. Cihaz/aksesuar terimi geçiyorsa ele
+    # 1. Kesici, Tüp, Aksesuar terimlerini doğrudan engelle
     if any(t in n_lower for t in EXCLUDE_TERMS):
         return False
         
-    # 2. İsmi filament mi veya tanımlı bir filament materyali içeriyor mu?
-    if "filament" in n_lower or "filaman" in n_lower:
+    # 2. Ürün adında makara/kilo veya malzeme türü var mı?
+    if "filament" in n_lower or "filaman" in n_lower or "1.75" in n_lower or "1,75" in n_lower:
         return True
         
     for _, pattern in MATERIAL_PATTERNS:
@@ -236,7 +237,7 @@ def fetch_robotistan() -> list[dict]:
     })
 
     base_url = "https://www.robotistan.com"
-    for page in range(1, 15):
+    for page in range(1, 20):
         try:
             res = sess.get(f"{base_url}/3d-filament?sayfa={page}", timeout=10)
             if res.status_code != 200: break
@@ -293,7 +294,7 @@ def run_update():
     if not update_lock.acquire(blocking=False): return
     print(">>> TARAMA BAŞLADI <<<", flush=True)
     try:
-        # Eski hatalı verileri veritabanından temizle
+        # Hatalı yedek parçaları veritabanından temizle
         with db() as conn:
             for term in EXCLUDE_TERMS:
                 conn.execute("DELETE FROM products WHERE LOWER(name) LIKE ?", (f"%{term}%",))
