@@ -212,12 +212,8 @@ def scrape_shopify(source: dict) -> list[dict]:
     raw_url = source["url"].rstrip("/")
     base_url = raw_url.split("/collections")[0]
 
-    # Porima için tam koleksiyon adresini tespit eder
-    if "/collections/" in raw_url:
-        coll = raw_url.split("/collections/")[1].split("/")[0]
-        json_endpoint = f"{base_url}/collections/{coll}/products.json"
-    else:
-        json_endpoint = f"{base_url}/products.json"
+    # Porima için tam koleksiyon adresinin doğru oluştuğundan emin olunur
+    json_endpoint = f"{raw_url}/products.json" if "/collections/" in raw_url else f"{base_url}/products.json"
 
     while page <= 10:
         req_url = f"{json_endpoint}?page={page}&limit=250"
@@ -327,7 +323,7 @@ def products():
         value = request.args.get(field, "").strip()
         if value: filters.append(f"{field} = ?"); params.append(value)
     if q:
-        filters.append("(name LIKE ? OR brand LIKE ? OR material LIKE ?)" )
+        filters.append("(name LIKE ? OR brand LIKE ? OR material LIKE ?)")
         params += [f"%{q}%"] * 3
     
     sql = "SELECT *, CASE WHEN weight_g > 0 THEN price * 1000.0 / weight_g END AS kg_price FROM products WHERE " + " AND ".join(filters) + " ORDER BY price ASC LIMIT 1000"
