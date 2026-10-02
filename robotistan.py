@@ -5,7 +5,9 @@ from bs4 import BeautifulSoup
 from datetime import datetime
 from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parent / "data" / "filaments_v9.db"
+# Veritabanı yolunu tam olarak app.py ile eşitliyoruz
+APP_DIR = Path(__file__).resolve().parent
+DB_PATH = APP_DIR / "data" / "filaments_v9.db"
 
 EXCLUDE_TERMS = [
     "nozzle", "hotend", "extruder", "kurutucu", "dryer", "dry box", "vakum", "poşet",
@@ -146,7 +148,6 @@ def scrape_robotistan():
                 if price <= 0:
                     continue
 
-                # Görsel Tespiti + Hotlink Engeli İçin WSVR Proxy
                 raw_img = ""
                 img_elem = card.find("img")
                 if img_elem:
@@ -161,7 +162,6 @@ def scrape_robotistan():
                     elif raw_img and not raw_img.startswith("http"):
                         raw_img = base_url + ("/" + raw_img.lstrip("/"))
 
-                # Hotlink engeline takılmamak için proxy linki oluştur
                 img_url = f"https://wsrv.nl/?url={raw_img}" if raw_img else ""
 
                 items.append({
@@ -210,7 +210,7 @@ def scrape_robotistan():
 
     conn.commit()
     conn.close()
-    print(f">>> [Robotistan] Tamamlandı! Toplam {saved_count} ürün eklendi/güncellendi.", flush=True)
+    print(f">>> [Robotistan] Tamamlandı! Toplam {saved_count} ürün veritabanına ({DB_PATH}) eklendi/güncellendi.", flush=True)
 
 if __name__ == "__main__":
     scrape_robotistan()
