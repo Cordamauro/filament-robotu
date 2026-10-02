@@ -68,20 +68,6 @@ COLOR_MAPPING = [
     (r"bej|beige", "Bej")
 ]
 
-COLOR_ALIASES = {
-    "sarı": ["sari", "yellow"],
-    "kırmızı": ["kirmizi", "red", "mercan"],
-    "beyaz": ["beyaz", "white", "ral9003"],
-    "siyah": ["siyah", "black"],
-    "mavi": ["mavi", "blue", "lacivert", "navy", "bebek mavisi"],
-    "yeşil": ["yesil", "green", "haki", "matcha", "su yeşili"],
-    "pembe": ["pembe", "pink"],
-    "gümüş": ["gumus", "silver"],
-    "altın": ["altin", "gold"],
-    "somon": ["somon", "salmon"],
-    "şeffaf": ["seffaf", "transparent", "clear", "natural", "naturel"]
-}
-
 MATERIAL_PATTERNS = [
     ("PETG-CF", r"\bPETG[- ]?CF\b"),
     ("PET-CF", r"\bPET[- ]?CF\d*\b"),
@@ -212,11 +198,15 @@ def scrape_shopify(source: dict) -> list[dict]:
     raw_url = source["url"].rstrip("/")
     base_url = raw_url.split("/collections")[0]
 
-    json_endpoint = raw_url if "products.json" in raw_url else f"{base_url}/products.json"
+    # Porima koleksiyon adresi doğrudan düzenleniyor
+    if "/collections/" in raw_url:
+        coll_name = raw_url.split("/collections/")[1].split("/")[0]
+        json_endpoint = f"{base_url}/collections/{coll_name}/products.json"
+    else:
+        json_endpoint = f"{base_url}/products.json"
 
     while page <= 10:
-        sep = "&" if "?" in json_endpoint else "?"
-        req_url = f"{json_endpoint}{sep}page={page}&limit=250"
+        req_url = f"{json_endpoint}?page={page}&limit=250"
         try:
             res = session.get(req_url, timeout=15)
             if res.status_code != 200: 
