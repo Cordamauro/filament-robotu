@@ -158,6 +158,7 @@ KNOWN_BRANDS = [
     "Bambu Lab",
     "Fibromast",
     "Robotistan",
+    "tinylab",
 ]
 
 
