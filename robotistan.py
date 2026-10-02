@@ -99,8 +99,7 @@ def scrape_robotistan():
     session = requests.Session()
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Referer': 'https://www.robotistan.com/'
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
     }
 
     base_url = "https://www.robotistan.com"
@@ -114,8 +113,6 @@ def scrape_robotistan():
                 break
 
             soup = BeautifulSoup(res.text, "html.parser")
-            
-            # Robotistan HTML Yapısında Tüm Ürün Detay Elemanlarını Yakala
             cards = soup.select(".product-item, .showProductScheme, .productItem, [class*='product-box']")
             if not cards:
                 cards = soup.find_all("div", class_=lambda c: c and "product" in str(c).lower())
@@ -149,20 +146,23 @@ def scrape_robotistan():
                 if price <= 0:
                     continue
 
-                # Görsel Tespiti (Hotlink engeline takılmayan orijinal resmi alma)
-                img_url = ""
+                # Görsel Tespiti + Hotlink Engeli İçin WSVR Proxy
+                raw_img = ""
                 img_elem = card.find("img")
                 if img_elem:
-                    img_url = (
+                    raw_img = (
                         img_elem.get("data-original") or 
                         img_elem.get("data-src") or 
                         img_elem.get("data-lazy") or 
                         img_elem.get("src") or ""
                     )
-                    if img_url.startswith("//"):
-                        img_url = "https:" + img_url
-                    elif img_url and not img_url.startswith("http"):
-                        img_url = base_url + ("/" + img_url.lstrip("/"))
+                    if raw_img.startswith("//"):
+                        raw_img = "https:" + raw_img
+                    elif raw_img and not raw_img.startswith("http"):
+                        raw_img = base_url + ("/" + raw_img.lstrip("/"))
+
+                # Hotlink engeline takılmamak için proxy linki oluştur
+                img_url = f"https://wsrv.nl/?url={raw_img}" if raw_img else ""
 
                 items.append({
                     "source": "Robotistan",
