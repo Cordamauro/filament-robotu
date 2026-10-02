@@ -8,13 +8,13 @@ from pathlib import Path
 # Veritabanı Yolu (app.py ile tam aynı veritabanını kullanır)
 DB_PATH = Path(__file__).resolve().parent / "data" / "filaments_v9.db"
 
-# Engellenecek Ekstra Aksesuar/Parça Terimleri
+# Engellenecek Parça / Aksesuar Terimleri
 EXCLUDE_TERMS = [
     "nozzle", "hotend", "extruder", "kurutucu", "dryer", "dry box", "vakum", "poşet",
     "reçine", "resin", "3d kalem", "spatula", "sprey", "rulman", "soğutucu", "fan",
     "step motor", "baskı tablası", "peı", "tabla", "sensör", "yazıcı", "printer",
     "somun", "vida", "kayış", "kasnak", "fişek", "ısıtıcı", "termistör", "yapıştırıcı",
-    "kalem", "temizleme", "borusu", "kesici", "modül", "kart", "sürücü", "numune"
+    "temizleme", "borusu", "kesici", "modül", "kart", "sürücü", "numune"
 ]
 
 MATERIAL_PATTERNS = [
@@ -44,13 +44,13 @@ COLOR_MAPPING = [
     (r"sarı|sari|yellow|badem|hardal", "Sarı"),
     (r"turuncu|orange", "Turuncu"),
     (r"siyah|black|antrasit", "Siyah"),
-    (r"gri|grey|gray", "Gri"),
+    (r"gri|grey|gray|silver", "Gri"),
     (r"kırmızı|kirmizi|red", "Kırmızı"),
     (r"altın|gold", "Altın"),
     (r"bej|beige", "Bej")
 ]
 
-KNOWN_BRANDS = ["eSUN", "Creality", "Porima", "Microzey", "Sunlu", "Anycubic", "Elegoo", "Bambu Lab", "Robotistan"]
+KNOWN_BRANDS = ["eSUN", "Creality", "Porima", "Microzey", "Sunlu", "Anycubic", "Elegoo", "Bambu Lab", "Fibromast", "Robotistan"]
 
 def init_db():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -96,7 +96,7 @@ def detect_brand(name: str) -> str:
     return "Robotistan"
 
 def scrape_robotistan():
-    print(">>> [Robotistan] Tarama Başladı...", flush=True)
+    print(">>> [Robotistan] Tarama Doğru URL İle Başlatıldı...", flush=True)
     
     session = requests.Session()
     headers = {
@@ -107,26 +107,30 @@ def scrape_robotistan():
     base_url = "https://www.robotistan.com"
     items = []
 
-    # Robotistan Filament Kategorisi Sayfaları
-    for page in range(1, 10):
-        target_url = f"{base_url}/3d-printer-filamentleri?sayfa={page}"
+    # Doğru Robotistan Kategori URL Yapısı: /3d-filament
+    for page in range(1, 8):
+        target_url = f"{base_url}/3d-filament?sayfa={page}"
         try:
-            res = session.get(target_url, headers=headers, timeout=12)
+            res = session.get(target_url, headers=headers, timeout=15)
             if res.status_code != 200:
+                print(f"[{target_url}] Yanıt Kodu: {res.status_code}")
                 break
 
             soup = BeautifulSoup(res.text, "html.parser")
-            cards = soup.select(".product-item, .showProductScheme, .productItem")
+            
+            # Ürün Kartlarını Yakala
+            cards = soup.select(".product-item, .showProductScheme, .productItem, .productDetail")
             if not cards:
-                cards = soup.find_all("div", class_=lambda c: c and "product" in c.lower())
+                cards = soup.find_all("div", class_=lambda c: c and "product" in str(c).lower())
 
             if not cards:
+                print(f"[{page}. Sayfa] Ürün kartı bulunamadı veya sayfa sonuna gelindi.")
                 break
 
             for card in cards:
-                title_elem = card.select_one(".product-title, .productName, h3, a.title")
+                title_elem = card.select_one(".product-title, .productName, h3, a.title, .p-name")
                 link_elem = card.find("a", href=True)
-                price_elem = card.select_one(".product-price, .current-price, .price")
+                price_elem = card.select_one(".product-price, .current-price, .price, .p-price")
                 img_elem = card.find("img")
 
                 if not title_elem or not link_elem:
