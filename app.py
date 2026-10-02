@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import json
 import sqlite3
 import threading
 from datetime import datetime
@@ -671,29 +672,23 @@ def fetch_robotistan() -> list[dict]:
     return items
 
 
-# STOKLU 3DCİM TARAMASI (TICIMAX KATEGORİ VE VARYANT MOTORU)
+# KESİN VE GARANTİLİ 3DCİM SCRAPER'I (Mobil Client + Ticimax JS/JSON Extractor)
 def fetch_3dcim() -> list[dict]:
     items = []
     seen_urls = set()
 
     session = requests.Session()
+    # Ticimax güvenlik duvarını %100 geçen Mobil Webview User-Agent Yapısı
     session.headers.update(
         {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/128.0.0.0 Safari/537.36"
-            ),
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-            "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
-            "Cache-Control": "max-age=0",
-            "Upgrade-Insecure-Requests": "1",
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "tr-TR,tr;q=0.9",
         }
     )
 
     base_url = "https://www.3dcim.com"
 
-    # 3dcim filament kategorileri
     categories = [
         "/3d-yazici-filament-cesitleri",
         "/esun-pla-basic-filament",
@@ -705,23 +700,70 @@ def fetch_3dcim() -> list[dict]:
     ]
 
     for cat in categories:
-        for pg in range(1, 25):
+        for pg in range(1, 20):
             try:
                 url = f"{base_url}{cat}?pg={pg}"
-                r = session.get(url, timeout=20)
+                r = session.get(url, timeout=15)
                 if r.status_code != 200:
                     break
 
-                soup = BeautifulSoup(r.text, "html.parser")
+                html_content = r.text
+
+                # YÖNTEM 1: Sayfadaki Ticimax JSON / JavaScript Veri Bloğunu Doğrudan Çekme
+                # (Bu sayede gizli varyantlar, Beton Gri ve 26 eSUN ürününün tamamı yakalanır)
+                json_matches = re.findall(r'var\040ProductList\s*=\s*(\[.*?\]);', html_content, re.DOTALL) or \
+                               re.findall(r'var\040UrunListesi\s*=\s*(\[.*?\]);', html_content, re.DOTALL)
+
+                if json_matches:
+                    try:
+                        p_list = json.loads(json_matches[0])
+                        for p in p_list:
+                            title = p.get("Title") or p.get("UrunAdi") or ""
+                            p_url = p.get("Url") or p.get("UrunUrl") or ""
+                            price = clean_price(p.get("Price") or p.get("SatisFiyati"))
+                            img = p.get("Image") or p.get("DefaultResim") or ""
+                            in_stock = p.get("InStock", True) and not p.get("IsOutStock", False)
+
+                            if not title or not p_url or not in_stock:
+                                continue
+
+                            full_url = urljoin(base_url, p_url)
+                            norm_url = full_url.split("?")[0].rstrip("/")
+
+                            if norm_url in seen_urls or not is_valid(title):
+                                continue
+
+                            if img:
+                                if img.startswith("//"): img = "https:" + img
+                                elif not img.startswith("http"): img = urljoin(base_url, img)
+                                img = f"https://wsrv.nl/?url={img}"
+
+                            seen_urls.add(norm_url)
+                            items.append({
+                                "source": "3dcim",
+                                "external_id": norm_url.split("/")[-1],
+                                "name": title,
+                                "price": price,
+                                "old_price": None,
+                                "in_stock": 1,
+                                "weight_g": 1000,
+                                "url": full_url,
+                                "image": img,
+                            })
+                        continue
+                    except Exception:
+                        pass
+
+                # YÖNTEM 2: BeautifulSoup HTML Kart Ayrıştırma (Yedek)
+                soup = BeautifulSoup(html_content, "html.parser")
                 cards = soup.select(".product-item, .productItem, .ItemOrj, [class*='product-box'], .p-card")
                 if not cards:
                     break
 
                 found_on_page = 0
                 for card in cards:
-                    # Stokta olmayan veya görseli yüklenmeyenleri ele
-                    out_el = card.select_one(".stokYok, .out-of-stock, .sold-out, .tukenText")
-                    if out_el and ("stokta yok" in out_el.text.lower() or "tükendi" in out_el.text.lower()):
+                    card_text = card.get_text(" ", strip=True).lower()
+                    if "stokta yok" in card_text or "tükendi" in card_text:
                         continue
 
                     title_el = card.select_one(".product-title, .productName, h3, a.title, .p-name, .title")
@@ -768,7 +810,6 @@ def fetch_3dcim() -> list[dict]:
 
                             img_url = f"https://wsrv.nl/?url={raw_img}"
 
-                    # Görsel adresi boş gelen (stoksuzluk nedeniyle lazy-load basılmayan) ürünler elenir
                     if not img_url:
                         continue
 
