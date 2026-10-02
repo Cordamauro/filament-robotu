@@ -458,18 +458,29 @@ def fetch_robotistan() -> list[dict]:
 
     session = requests.Session()
 
+    # Robotistan için anti-bot engellerini aşacak tam tarayıcı başlıkları
     session.headers.update(
         {
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/124.0.0.0 Safari/537.36"
+                "Chrome/128.0.0.0 Safari/537.36"
             ),
             "Accept": (
                 "text/html,application/xhtml+xml,"
-                "application/xml;q=0.9,*/*;q=0.8"
+                "application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
             ),
-            "Accept-Language": "tr-TR,tr;q=0.9,en;q=0.8",
+            "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
+            "Sec-Ch-Ua": '"Chromium";v="128", "Not=A?Brand";v="24", "Google Chrome";v="128"',
+            "Sec-Ch-Ua-Mobile": "?0",
+            "Sec-Ch-Ua-Platform": '"Windows"',
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-User": "?1",
+            "Upgrade-Insecure-Requests": "1",
         }
     )
 
@@ -482,7 +493,9 @@ def fetch_robotistan() -> list[dict]:
             )
 
             response = session.get(page_url, timeout=25)
-            response.raise_for_status()
+            if response.status_code != 200:
+                print(f"[Robotistan] HTTP {response.status_code} alındı, durduruluyor.", flush=True)
+                break
 
             soup = BeautifulSoup(
                 response.text,
@@ -493,7 +506,9 @@ def fetch_robotistan() -> list[dict]:
                 ".product-item, "
                 ".showProductScheme, "
                 ".productItem, "
-                "[class*='product-box']"
+                "[class*='product-box'], "
+                ".product_box, "
+                ".ItemOrj"
             )
 
             if not cards:
@@ -512,7 +527,8 @@ def fetch_robotistan() -> list[dict]:
                     ".productName, "
                     "h3, "
                     "a.title, "
-                    ".p-name"
+                    ".p-name, "
+                    ".product-name"
                 )
 
                 if not title_element:
@@ -562,7 +578,8 @@ def fetch_robotistan() -> list[dict]:
                     ".product-price, "
                     ".current-price, "
                     ".price, "
-                    ".p-price"
+                    ".p-price, "
+                    ".product-price-new"
                 )
 
                 price = None
@@ -674,7 +691,6 @@ def fetch_3dcim() -> list[dict]:
 
     base_url = "https://www.3dcim.com"
 
-    # Tüm renk varyantlarını (Beton Gri dahil) ve kategori ürünlerini derinlemesine tarama
     categories = [
         "/3d-yazici-filament-cesitleri",
         "/pla-filamentler",
@@ -713,7 +729,6 @@ def fetch_3dcim() -> list[dict]:
                     card_html = str(card).lower()
                     card_text = card.get_text(" ", strip=True).lower()
 
-                    # Sadece GERÇEKTEN Tükendi/Stokta Yok olanları filtrele
                     if (
                         "stokta yok" in card_text
                         or "tükendi" in card_text
