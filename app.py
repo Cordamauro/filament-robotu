@@ -5,10 +5,10 @@ import os
 import re
 import sqlite3
 import threading
+import subprocess
 import concurrent.futures
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
@@ -100,18 +100,15 @@ MATERIAL_PATTERNS = [
 ]
 
 EXCLUDE_TERMS = [
-    "tutucu", "holder", "destek", "ayak", "kolu", "stent", "aparat", "model", "yedek parça",
-    "hub", "splitter", "buffer", "feeder", "cutter", "tube", "replacement", "ptfe", "kesici", "borusu", "bıçak", "makas",
     "nozzle", "hotend", "extruder", "kurutucu", "dryer", "dry box", "vakum", "poşet",
     "reçine", "resin", "3d kalem", "spatula", "sprey", "rulman", "soğutucu", "fan",
-    "step motor", "baskı tablası", "peı", "tabla", "sensör", "sensor", "yazıcı", "printer",
-    "somun", "vida", "kayış", "kasnak", "fişek", "ısıtıcı", "termistör", "yapıştırıcı",
-    "temizleme", "temizleyici", "modül", "kart", "sürücü", "coupler", "swatch", "numune"
+    "step motor", "baskı tablası", "peı", "tabla", "sensör", "yazıcı", "printer",
+    "somun", "vida", "kayış", "kasnak", "fişek", "ısıtıcı", "termistör", "yapıştırıcı"
 ]
 
 KNOWN_BRANDS = [
     "Microzey", "Porima", "Filamix", "Beta Filament", "R3D", "Creality", "Anycubic", 
-    "Sunlu", "eSUN", "Polymaker", "Elegoo", "Spectrum", "Formfutura", "Bambu Lab", "Filenta"
+    "Sunlu", "eSUN", "Polymaker", "Elegoo", "Spectrum", "Formfutura", "Bambu Lab", "Senin Fabrikan"
 ]
 
 
@@ -149,13 +146,7 @@ def is_valid_filament(name: str) -> bool:
     name_lower = name.lower()
     if any(term in name_lower for term in EXCLUDE_TERMS):
         return False
-    if "filament" in name_lower:
-        return True
-    materials = ["pla", "petg", "abs", "tpu", "asa", "pva", "nylon", "carbon", "pc", "hips", "basic"]
-    for mat in materials:
-        if re.search(rf"\b{mat}\b", name_lower):
-            return True
-    return False
+    return True
 
 
 def detect_color(text: str) -> str | None:
@@ -188,9 +179,6 @@ def save_products(items: list[dict]) -> int:
             name = clean_text(p.get("name"))
             if not name or not is_valid_filament(name):
                 continue
-                
-            if not p.get("in_stock") or p.get("in_stock") != 1:
-                continue
 
             price = p.get("price")
             if not price or price <= 0:
@@ -212,22 +200,33 @@ def save_products(items: list[dict]) -> int:
     return saved
 
 
-def scrape_shopify(source: dict, headers: dict) -> list[dict]:
+def scrape_shopify(source: dict) -> list[dict]:
     items = []
     page = 1
-    base_url = source["url"].split("/products.json")[0].rstrip("/")
+    
+    session = requests.Session()
+    session.headers.update({
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7'
+    })
+
+    raw_url = source["url"]
+    base_url = raw_url.split("/products.json")[0].split("/collections")[0].rstrip("/")
+
     while page <= 10:
-        req_url = f"{base_url}/products.json?page={page}&limit=250"
+        req_url = f"{base_url}/collections/filamentler/products.json?page={page}&limit=250"
         try:
-            res = requests.get(req_url, headers=headers, timeout=10)
-            if res.status_code != 200: break
+            res = session.get(req_url, timeout=15)
+            if res.status_code != 200: 
+                break
+                
             products = res.json().get("products", [])
-            if not products: break
+            if not products: 
+                break
             
             for p in products:
                 title = p.get('title', '')
-                if not is_valid_filament(title): continue
-
                 images = p.get("images") or []
                 img_map = {img.get("id"): img.get("src") for img in images if img.get("id") and img.get("src")}
                 default_img = images[0].get("src") if images else ""
@@ -239,7 +238,8 @@ def scrape_shopify(source: dict, headers: dict) -> list[dict]:
                     v_title = v.get('title', '')
                     full_name = f"{title} {v_title if v_title != 'Default Title' else ''}"
                     
-                    if not is_valid_filament(full_name): continue
+                    if not is_valid_filament(full_name): 
+                        continue
 
                     v_img_src = None
                     v_img_id = v.get("image_id")
@@ -249,27 +249,11 @@ def scrape_shopify(source: dict, headers: dict) -> list[dict]:
                     if not v_img_src and v.get("featured_image"):
                         v_img_src = v.get("featured_image", {}).get("src")
 
-                    if not v_img_src and len(images) > 1:
-                        v_title_lower = v_title.lower()
-                        for img in images:
-                            src_lower = (img.get("src") or "").lower()
-                            alt_lower = (img.get("alt") or "").lower()
-                            
-                            for color_key, aliases in COLOR_ALIASES.items():
-                                if color_key in v_title_lower:
-                                    for alias in aliases:
-                                        if alias in src_lower or alias in alt_lower:
-                                            v_img_src = img.get("src")
-                                            break
-                                if v_img_src: break
-
                     if not v_img_src:
                         v_img_src = default_img
 
                     if v_img_src and v_img_src.startswith("//"):
                         v_img_src = "https:" + v_img_src
-                    elif v_img_src and not v_img_src.startswith("http"):
-                        v_img_src = base_url + "/" + v_img_src.lstrip("/")
 
                     price = price_number(v.get("price"))
                     if price and price > 0:
@@ -284,18 +268,10 @@ def scrape_shopify(source: dict, headers: dict) -> list[dict]:
                             "image": v_img_src
                         })
             page += 1
-        except Exception:
+        except Exception as e:
+            print(f"[{source['name']}] Hata: {e}", flush=True)
             break
     return items
-
-
-def scrape_source(source: dict) -> list[dict]:
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-        'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7'
-    }
-    return scrape_shopify(source, headers)
 
 
 def update_all() -> None:
@@ -305,33 +281,29 @@ def update_all() -> None:
     print(">>> FİLAMAN TARAMA SÜRECİ BAŞLADI <<<", flush=True)
     
     try:
-        # 1. PORİMA VE DİĞER MAĞAZALAR TARANIYOR
+        # 1. Porima Shopify Mağazasını Tara
         if SOURCES_PATH.exists():
             sources = json.loads(SOURCES_PATH.read_text(encoding="utf-8"))
-            active_sources = [s for s in sources if s.get("enabled", True) and "robitshop" not in s.get("name", "").lower()]
+            active_sources = [s for s in sources if s.get("enabled", True)]
             
-            total_saved = 0
-            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-                future_to_source = {executor.submit(scrape_source, s): s for s in active_sources}
-                for future in concurrent.futures.as_completed(future_to_source):
-                    s = future_to_source[future]
-                    try:
-                        items = future.result()
-                        count = save_products(items)
-                        total_saved += count
-                        print(f"[{s['name']}] -> {count} adet tam filament eklendi.", flush=True)
-                    except Exception as e:
-                        print(f"[{s['name']}] Hata: {e}", flush=True)
+            for s in active_sources:
+                try:
+                    items = scrape_shopify(s)
+                    count = save_products(items)
+                    print(f"[{s['name']}] -> {count} adet tam filament eklendi.", flush=True)
+                except Exception as e:
+                    print(f"[{s['name']}] Hata: {e}", flush=True)
 
-        # 2. ROBİTSHOP DOĞRUDAN DÖNGÜ İÇİNDE TARANIYOR
-        try:
-            robit_items = scrape_robitshop_direct()
-            if robit_items:
-                r_count = save_products(robit_items)
-                print(f"[Robitshop] -> {r_count} adet tam filament veritabanına kaydedildi.", flush=True)
-        except Exception as e:
-            print(f"[Robitshop] Genel Tarama Hatası: {e}", flush=True)
+        # 2. Bağımsız Scriptleri (Senin Fabrikan & Robotistan) Arka Planda Çalıştır
+        for script_name in ["seninfabrikan.py", "robotistan.py"]:
+            script_path = APP_DIR / script_name
+            if script_path.exists():
+                try:
+                    subprocess.run(["python", str(script_path)], check=True)
+                except Exception as e:
+                    print(f"[{script_name}] Hata: {e}", flush=True)
 
+        print(">>> TARAMA TAMAMLAMDI. <<<", flush=True)
         update_state.update(message="Güncellendi", updated_at=datetime.now().strftime("%d.%m.%Y %H:%M"))
     finally:
         update_state["running"] = False
