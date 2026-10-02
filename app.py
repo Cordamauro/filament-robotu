@@ -66,8 +66,8 @@ MATERIAL_PATTERNS = [
     ("PLA", r"\bPLA(?:\+|[- ]?PLUS|[- ]?PRO|[- ]?BASIC|[- ]?HS)?\b")
 ]
 
-# ROBOTİSTAN İÇİN YEDEK PARÇA VE AKSESUAR ENGELLEME LİSTESİ
-ROBOTISTAN_EXCLUDE = [
+# HER İKİ TARAFTA DA CİHAZ VE AKSESUARLARI ENGELLEYEN KESİN FİLTRE
+EXCLUDE_TERMS = [
     "cutter", "tube", "replacement", "print head", "head", "kesici", "boru", "borusu",
     "yıkama", "kürleme", "tarayıcı", "tarayici", "lazer", "gravür", "gravur", "turntable",
     "makinesi", "makine", "bundle", "scan", "scanner", "wash", "cure", "laser", "engraver",
@@ -132,7 +132,14 @@ def detect_brand(name: str, fallback_source: str) -> str:
     return fallback_source
 
 
-# PORİMA TARAMASI VE KAYIT MANTIĞI (DOKUNULMADI)
+# PORİMA İÇİN SIKI BAĞIMSIZ FİLTRE
+def is_valid_porima(name: str) -> bool:
+    n_lower = name.lower()
+    if any(t in n_lower for t in EXCLUDE_TERMS):
+        return False
+    return True
+
+
 def fetch_porima() -> list[dict]:
     items = []
     sess = requests.Session()
@@ -158,6 +165,9 @@ def fetch_porima() -> list[dict]:
                     if not v.get("available"): continue
                     v_title = v.get('title', '')
                     full_name = f"{title} {v_title if v_title != 'Default Title' else ''}"
+
+                    if not is_valid_porima(full_name):
+                        continue
 
                     price = clean_price(v.get("price"))
                     if price:
@@ -208,10 +218,10 @@ def save_porima_items(items: list[dict]) -> int:
     return count
 
 
-# YENİ VE HIZLI ROBOTİSTAN RAM BATCHING KODU
+# ROBOTİSTAN İÇİN SIKI BAĞIMSIZ FİLTRE
 def is_valid_robotistan(name: str) -> bool:
     n_lower = name.lower()
-    if any(t in n_lower for t in ROBOTISTAN_EXCLUDE):
+    if any(t in n_lower for t in EXCLUDE_TERMS):
         return False
     return True
 
@@ -301,7 +311,12 @@ def run_update():
     if not update_lock.acquire(blocking=False): return
     print(">>> TARAMA BAŞLADI <<<", flush=True)
     try:
-        # 1. Porima Taraması (Orijinal Mantık)
+        # Veritabanında önceden kalmış geçersiz cihazları temizle
+        with db() as conn:
+            for term in EXCLUDE_TERMS:
+                conn.execute("DELETE FROM products WHERE LOWER(name) LIKE ?", (f"%{term}%",))
+
+        # 1. Porima Taraması
         try:
             p_items = fetch_porima()
             p_c = save_porima_items(p_items)
@@ -313,7 +328,7 @@ def run_update():
         try:
             r_records = fetch_robotistan_memory()
             r_c = save_robotistan_atomic(r_records)
-            print(f"[Robotistan] -> {r_c} ürün kilitlenmeden toplu eklendi.", flush=True)
+            print(f"[Robotistan] -> {r_c} ürün eklendi.", flush=True)
         except Exception as e:
             print(f"[Robotistan] Hata: {e}", flush=True)
 
