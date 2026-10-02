@@ -98,7 +98,7 @@ KNOWN_BRANDS = [
 
 
 def db() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=20.0)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -185,35 +185,26 @@ def save_products(items: list[dict]) -> int:
     return saved
 
 
-def scrape_shopify(source: dict) -> list[dict]:
+def scrape_porima_direct() -> list[dict]:
     items = []
-    page = 1
-    
-    session = requests.Session()
-    session.headers.update({
+    headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Accept': 'application/json, text/plain, */*'
-    })
-
-    endpoint = source["url"]
-    base_url = endpoint.split("/collections")[0]
-
-    while page <= 10:
-        sep = "&" if "?" in endpoint else "?"
-        req_url = f"{endpoint}{sep}page={page}&limit=250"
+        'Accept': 'application/json'
+    }
+    
+    for page in range(1, 10):
+        url = f"https://porima3d.com/collections/filamentler/products.json?page={page}&limit=250"
         try:
-            res = session.get(req_url, timeout=15)
-            if res.status_code != 200: 
+            res = requests.get(url, headers=headers, timeout=12)
+            if res.status_code != 200:
                 break
-                
             products = res.json().get("products", [])
-            if not products: 
+            if not products:
                 break
-            
+
             for p in products:
                 title = p.get('title', '')
                 images = p.get("images") or []
-                img_map = {img.get("id"): img.get("src") for img in images if img.get("id") and img.get("src")}
                 default_img = images[0].get("src") if images else ""
 
                 for v in p.get("variants", []):
@@ -223,39 +214,29 @@ def scrape_shopify(source: dict) -> list[dict]:
                     v_title = v.get('title', '')
                     full_name = f"{title} {v_title if v_title != 'Default Title' else ''}"
                     
-                    if not is_valid_filament(full_name): 
+                    if not is_valid_filament(full_name):
                         continue
-
-                    v_img_src = None
-                    v_img_id = v.get("image_id")
-                    if v_img_id:
-                        v_img_src = img_map.get(v_img_id)
-
-                    if not v_img_src and v.get("featured_image"):
-                        v_img_src = v.get("featured_image", {}).get("src")
-
-                    if not v_img_src:
-                        v_img_src = default_img
-
-                    if v_img_src and v_img_src.startswith("//"):
-                        v_img_src = "https:" + v_img_src
 
                     price = price_number(v.get("price"))
                     if price and price > 0:
+                        v_img = v.get("featured_image", {}).get("src") if v.get("featured_image") else default_img
+                        if v_img and v_img.startswith("//"):
+                            v_img = "https:" + v_img
+
                         items.append({
-                            "source": source["name"],
+                            "source": "Porima 3D",
                             "external_id": str(v.get("id")),
                             "name": full_name,
                             "price": price,
                             "old_price": price_number(v.get("compare_at_price")),
                             "in_stock": 1,
-                            "url": f"{base_url}/products/{p.get('handle')}?variant={v.get('id')}",
-                            "image": v_img_src
+                            "url": f"https://porima3d.com/products/{p.get('handle')}?variant={v.get('id')}",
+                            "image": v_img
                         })
-            page += 1
         except Exception as e:
-            print(f"[{source['name']}] Hata: {e}", flush=True)
+            print(f"[Porima 3D] İstek Hatası: {e}", flush=True)
             break
+            
     return items
 
 
@@ -266,18 +247,13 @@ def update_all() -> None:
     print(">>> FİLAMAN TARAMA SÜRECİ BAŞLADI <<<", flush=True)
     
     try:
-        # 1. Porima Shopify Mağazasını Tara
-        if SOURCES_PATH.exists():
-            sources = json.loads(SOURCES_PATH.read_text(encoding="utf-8"))
-            active_sources = [s for s in sources if s.get("enabled", True)]
-            
-            for s in active_sources:
-                try:
-                    items = scrape_shopify(s)
-                    count = save_products(items)
-                    print(f"[{s['name']}] -> {count} adet tam filament eklendi.", flush=True)
-                except Exception as e:
-                    print(f"[{s['name']}] Hata: {e}", flush=True)
+        # 1. Porima 3D Doğrudan Taraması
+        try:
+            porima_items = scrape_porima_direct()
+            count = save_products(porima_items)
+            print(f"[Porima 3D] -> {count} adet tam filament eklendi.", flush=True)
+        except Exception as e:
+            print(f"[Porima 3D] Hata: {e}", flush=True)
 
         # 2. Robotistan Scriptini Arka Planda Çalıştır
         robotistan_script = APP_DIR / "robotistan.py"
@@ -303,16 +279,22 @@ def index():
 def products():
     q = request.args.get("q", "").strip()
     filters, params = ["in_stock = 1"], []
+    
+    # Kriter filtresinde marka veya kaynak varsa uygula
     for field in ("brand", "material", "color", "source"):
         value = request.args.get(field, "").strip()
-        if value: filters.append(f"{field} = ?"); params.append(value)
+        if value: 
+            filters.append(f"{field} = ?")
+            params.append(value)
+            
     if q:
         filters.append("(name LIKE ? OR brand LIKE ? OR material LIKE ?)")
         params += [f"%{q}%"] * 3
     
     sql = "SELECT *, CASE WHEN weight_g > 0 THEN price * 1000.0 / weight_g END AS kg_price FROM products WHERE " + " AND ".join(filters) + " ORDER BY price ASC LIMIT 1000"
     
-    with db() as conn: rows = [dict(r) for r in conn.execute(sql, params)]
+    with db() as conn:
+        rows = [dict(r) for r in conn.execute(sql, params)]
     return jsonify(rows)
 
 
