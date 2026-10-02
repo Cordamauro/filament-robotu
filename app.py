@@ -675,7 +675,7 @@ def fetch_robotistan() -> list[dict]:
     return items
 
 
-# FİLAMENT MARKETİM (İDEASOFT ALTYAPISI - KESİN ÇALIŞAN SCRAPER)
+# TEŞHİS / DEBUG LOGLU FILAMENT MARKETIM SCRAPER'I
 def fetch_filamentmarketim() -> list[dict]:
     items = []
     seen_urls = set()
@@ -689,136 +689,99 @@ def fetch_filamentmarketim() -> list[dict]:
                 "Chrome/128.0.0.0 Safari/537.36"
             ),
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
         }
     )
 
     base_url = "https://www.filamentmarketim.com"
-    categories = [
+    
+    # Farklı URL varyasyonlarını sırayla dene
+    target_urls = [
+        "/3d-filamentler",
+        "/filamentler",
         "/kategori/3d-filamentler",
-        "/kategori/pla-filament",
-        "/kategori/petg-filament",
-        "/kategori/abs-filament",
-        "/kategori/tpu-flex-filament",
+        "/pla-filament",
     ]
 
-    for cat in categories:
-        for page_number in range(1, 20):
-            try:
-                if page_number == 1:
-                    page_url = f"{base_url}{cat}"
-                else:
-                    page_url = f"{base_url}{cat}?tp={page_number}"
+    for path in target_urls:
+        full_url = f"{base_url}{path}"
+        try:
+            res = session.get(full_url, timeout=15)
+            print(f"[FM Debug] URL: {path} | Status: {res.status_code}", flush=True)
 
-                response = session.get(page_url, timeout=20)
-
-                if response.status_code != 200:
-                    break
-
-                soup = BeautifulSoup(response.text, "html.parser")
+            if res.status_code == 200:
+                soup = BeautifulSoup(res.text, "html.parser")
+                
+                # Sitede geçen tüm ürün kartı türlerini tara
                 cards = soup.select(
-                    ".product-item, .showProductScheme, .productItem, [class*='product-box'], .product-detail-card"
+                    ".product-item, .productItem, .showProductScheme, "
+                    "[class*='product'], .p-card, .product-box"
                 )
+                
+                print(f"[FM Debug] URL {path} adresinde {len(cards)} potansiyel kart bulundu.", flush=True)
 
-                if not cards:
-                    break
+                if cards:
+                    for card in cards:
+                        title_el = card.select_one(".product-title, .productName, h3, a.title, .title, [class*='name']")
+                        link_el = card.find("a", href=True)
+                        price_el = card.select_one(".product-price, .price, .current-price, [class*='price']")
 
-                new_products_on_page = 0
+                        if not title_el or not link_el or not price_el:
+                            continue
 
-                for card in cards:
-                    card_text = card.get_text(" ", strip=True).lower()
-                    if "tükendi" in card_text or "stokta yok" in card_text:
-                        continue
+                        title = title_el.get_text(" ", strip=True)
+                        if not is_valid(title):
+                            continue
 
-                    title_element = card.select_one(
-                        ".product-title, .productName, h3, a.title, .p-name, .product-name"
-                    )
-                    if not title_element:
-                        continue
+                        price = clean_price(price_el.get_text(" ", strip=True))
+                        if not price or price <= 0:
+                            continue
 
-                    title = title_element.get_text(" ", strip=True)
-                    if not title or not is_valid(title):
-                        continue
+                        p_url = urljoin(base_url, link_el["href"].strip())
+                        norm_url = p_url.split("?")[0].rstrip("/")
 
-                    link_element = card.find("a", href=True)
-                    if not link_element:
-                        continue
+                        if norm_url in seen_urls:
+                            continue
 
-                    raw_url = link_element.get("href", "").strip()
-                    if not raw_url:
-                        continue
+                        img_el = card.find("img")
+                        img_url = ""
+                        if img_el:
+                            raw_img = (
+                                img_el.get("data-original")
+                                or img_el.get("data-src")
+                                or img_el.get("src")
+                                or ""
+                            ).strip()
 
-                    product_url = urljoin(base_url, raw_url)
-                    normalized_url = product_url.split("?")[0].rstrip("/")
+                            if raw_img and "blank" not in raw_img.lower():
+                                if raw_img.startswith("//"):
+                                    raw_img = "https:" + raw_img
+                                elif not raw_img.startswith("http"):
+                                    raw_img = urljoin(base_url, raw_img)
+                                img_url = f"https://wsrv.nl/?url={raw_img}"
 
-                    if normalized_url in seen_urls:
-                        continue
+                        if not img_url:
+                            continue
 
-                    price_element = card.select_one(
-                        ".product-price, .current-price, .price, .p-price, .product-price-new"
-                    )
-                    price = clean_price(price_element.get_text(" ", strip=True)) if price_element else None
-
-                    if price is None or price <= 0:
-                        continue
-
-                    image_element = card.find("img")
-                    image_url = ""
-
-                    if image_element:
-                        raw_image = (
-                            image_element.get("data-original")
-                            or image_element.get("data-src")
-                            or image_element.get("data-lazy")
-                            or image_element.get("src")
-                            or ""
-                        ).strip()
-
-                        if raw_image and "blank" not in raw_image.lower():
-                            if raw_image.startswith("//"):
-                                full_img_url = "https:" + raw_image
-                            elif raw_image.startswith("http"):
-                                full_img_url = raw_image
-                            else:
-                                full_img_url = urljoin(base_url, raw_image)
-
-                            image_url = f"https://wsrv.nl/?url={full_img_url}"
-
-                    if not image_url:
-                        continue
-
-                    seen_urls.add(normalized_url)
-
-                    items.append(
-                        {
+                        seen_urls.add(norm_url)
+                        items.append({
                             "source": "Filament Marketim",
-                            "external_id": normalized_url.rstrip("/").split("/")[-1],
+                            "external_id": norm_url.split("/")[-1],
                             "name": title,
                             "price": price,
                             "old_price": None,
                             "in_stock": 1,
                             "weight_g": 1000,
-                            "url": product_url,
-                            "image": image_url,
-                        }
-                    )
+                            "url": p_url,
+                            "image": img_url,
+                        })
 
-                    new_products_on_page += 1
+                    if len(items) > 0:
+                        break
 
-                if new_products_on_page == 0:
-                    break
+        except Exception as err:
+            print(f"[FM Debug] {path} Hatası: {err}", flush=True)
 
-            except Exception as error:
-                print(
-                    f"[Filament Marketim] Kategori {cat} Sayfa {page_number} hatası: {error}",
-                    flush=True,
-                )
-                break
-
-    print(
-        f"[Filament Marketim] Toplam {len(items)} stoklu filament bulundu.",
-        flush=True,
-    )
+    print(f"[Filament Marketim] Toplam {len(items)} stoklu filament bulundu.", flush=True)
     return items
 
 
