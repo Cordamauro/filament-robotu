@@ -8,12 +8,13 @@ from pathlib import Path
 # Veritabanı Yolu (app.py ile tam aynı veritabanını kullanır)
 DB_PATH = Path(__file__).resolve().parent / "data" / "filaments_v9.db"
 
-# Engellenecek Ekstra Parçalar
+# Engellenecek Ekstra Aksesuar/Parça Terimleri
 EXCLUDE_TERMS = [
     "nozzle", "hotend", "extruder", "kurutucu", "dryer", "dry box", "vakum", "poşet",
     "reçine", "resin", "3d kalem", "spatula", "sprey", "rulman", "soğutucu", "fan",
     "step motor", "baskı tablası", "peı", "tabla", "sensör", "yazıcı", "printer",
-    "somun", "vida", "kayış", "kasnak", "fişek", "ısıtıcı", "termistör", "yapıştırıcı", "naylonu"
+    "somun", "vida", "kayış", "kasnak", "fişek", "ısıtıcı", "termistör", "yapıştırıcı",
+    "kalem", "temizleme", "borusu", "kesici", "modül", "kart", "sürücü", "numune"
 ]
 
 MATERIAL_PATTERNS = [
@@ -33,21 +34,23 @@ MATERIAL_PATTERNS = [
 ]
 
 COLOR_MAPPING = [
-    (r"mavi|blue|lacivert|navy|turkuaz|aqua|pus mavisi", "Mavi"),
+    (r"mavi|blue|lacivert|navy|turkuaz|aqua", "Mavi"),
     (r"pembe|pink|magenta|fuşya", "Pembe"),
-    (r"beyaz|white|süt beyazı|kemik beyazı|soğuk beyaz", "Beyaz"),
-    (r"kahverengi|brown|mocha|açık kahverengi|tuğla", "Kahverengi"),
-    (r"mor|purple|violet|lila|very peri", "Mor"),
+    (r"beyaz|white", "Beyaz"),
+    (r"kahverengi|brown|mocha|tuğla", "Kahverengi"),
+    (r"mor|purple|violet|lila", "Mor"),
     (r"gümüş|silver", "Gümüş"),
-    (r"yeşil|yesil|green|haki|mint|matcha|zeytin|çim|çam|yeşim", "Yeşil"),
-    (r"sarı|sari|yellow|badem sarısı|hardal", "Sarı"),
-    (r"turuncu|orange|mandalina|mercal", "Turuncu"),
+    (r"yeşil|yesil|green|haki|mint|matcha|zeytin", "Yeşil"),
+    (r"sarı|sari|yellow|badem|hardal", "Sarı"),
+    (r"turuncu|orange", "Turuncu"),
     (r"siyah|black|antrasit", "Siyah"),
-    (r"gri|grey|gray|beton grisi", "Gri"),
-    (r"kırmızı|kirmizi|red|itfaiye kırmızısı", "Kırmızı"),
-    (r"altın|gold|pirinç", "Altın"),
-    (r"bej|beige|kayısı", "Bej")
+    (r"gri|grey|gray", "Gri"),
+    (r"kırmızı|kirmizi|red", "Kırmızı"),
+    (r"altın|gold", "Altın"),
+    (r"bej|beige", "Bej")
 ]
+
+KNOWN_BRANDS = ["eSUN", "Creality", "Porima", "Microzey", "Sunlu", "Anycubic", "Elegoo", "Bambu Lab", "Robotistan"]
 
 def init_db():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -86,8 +89,14 @@ def detect_color(name: str) -> str:
             return color
     return "Mavi"
 
-def scrape_senin_fabrikan():
-    print(">>> [Senin Fabrikan] Özel HTML Tarayıcısı Başlatıldı...", flush=True)
+def detect_brand(name: str) -> str:
+    for b in KNOWN_BRANDS:
+        if b.lower() in name.lower():
+            return b
+    return "Robotistan"
+
+def scrape_robotistan():
+    print(">>> [Robotistan] Tarama Başladı...", flush=True)
     
     session = requests.Session()
     headers = {
@@ -95,33 +104,29 @@ def scrape_senin_fabrikan():
         'Accept-Language': 'tr-TR,tr;q=0.9'
     }
 
-    base_url = "https://seninfabrikan.com"
-    target_urls = [
-        f"{base_url}/uc-boyutlu-yazici/filament/",
-        f"{base_url}/uc-boyutlu-yazici/filament/?sayfa=2",
-        f"{base_url}/uc-boyutlu-yazici/filament/?sayfa=3",
-        f"{base_url}/uc-boyutlu-yazici/filament/?sayfa=4"
-    ]
-
+    base_url = "https://www.robotistan.com"
     items = []
 
-    for target_url in target_urls:
+    # Robotistan Filament Kategorisi Sayfaları
+    for page in range(1, 10):
+        target_url = f"{base_url}/3d-printer-filamentleri?sayfa={page}"
         try:
             res = session.get(target_url, headers=headers, timeout=12)
             if res.status_code != 200:
-                continue
+                break
 
             soup = BeautifulSoup(res.text, "html.parser")
-            
-            # Ürün Kartlarını Yakala
-            cards = soup.find_all(["div", "article"], class_=lambda c: c and ("product" in c.lower() or "item" in c.lower()))
+            cards = soup.select(".product-item, .showProductScheme, .productItem")
             if not cards:
-                cards = soup.select(".product-item, .product-card, .item, .showProductScheme")
+                cards = soup.find_all("div", class_=lambda c: c and "product" in c.lower())
+
+            if not cards:
+                break
 
             for card in cards:
-                title_elem = card.find(["a", "h2", "h3", "div"], class_=lambda c: c and ("title" in c.lower() or "name" in c.lower() or "product" in c.lower()))
+                title_elem = card.select_one(".product-title, .productName, h3, a.title")
                 link_elem = card.find("a", href=True)
-                price_elem = card.find(["span", "div", "p"], class_=lambda c: c and ("price" in c.lower() or "fiyat" in c.lower()))
+                price_elem = card.select_one(".product-price, .current-price, .price")
                 img_elem = card.find("img")
 
                 if not title_elem or not link_elem:
@@ -130,7 +135,7 @@ def scrape_senin_fabrikan():
                 title = title_elem.get_text(strip=True)
                 title_lower = title.lower()
 
-                # Parça/aksesuar engelleme
+                # Parça / aksesuar engelleme
                 if any(term in title_lower for term in EXCLUDE_TERMS):
                     continue
 
@@ -153,13 +158,11 @@ def scrape_senin_fabrikan():
                     elif img_url and not img_url.startswith("http"):
                         img_url = base_url + ("/" + img_url.lstrip("/"))
 
-                brand = "eSUN" if "esun" in title_lower else ("Filenta" if "filenta" in title_lower else "Senin Fabrikan")
-
                 items.append({
-                    "source": "Senin Fabrikan",
-                    "external_id": prod_url.split("/")[-2] if len(prod_url.split("/")) > 2 else "",
+                    "source": "Robotistan",
+                    "external_id": prod_url.rstrip("/").split("/")[-1],
                     "name": title,
-                    "brand": brand,
+                    "brand": detect_brand(title),
                     "material": detect_material(title),
                     "color": detect_color(title),
                     "weight_g": 1000,
@@ -172,6 +175,7 @@ def scrape_senin_fabrikan():
 
         except Exception as e:
             print(f"Hata ({target_url}): {e}")
+            break
 
     # Veritabanına Kaydet
     init_db()
@@ -198,7 +202,7 @@ def scrape_senin_fabrikan():
     conn.commit()
     conn.close()
     
-    print(f">>> [Senin Fabrikan] Tamamlandı! Toplam {saved_count} ürün veritabanına eklendi/güncellendi.", flush=True)
+    print(f">>> [Robotistan] Tamamlandı! Toplam {saved_count} ürün veritabanına eklendi/güncellendi.", flush=True)
 
 if __name__ == "__main__":
-    scrape_senin_fabrikan()
+    scrape_robotistan()
