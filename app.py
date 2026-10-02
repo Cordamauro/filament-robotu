@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import json
 import os
 import re
 import sqlite3
 import threading
+import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urljoin
@@ -676,146 +676,114 @@ def fetch_robotistan() -> list[dict]:
     return items
 
 
-# FİLAMENT MARKETİM HIZLI VARYANT TARAMA MOTORU
+# FİLAMENT MARKETİM - BÜTÜN RENK VARYANTLARINI ÇEKEN XML FEED ENGINE
 def fetch_filamentmarketim() -> list[dict]:
     items = []
     seen_urls = set()
-    session = requests.Session()
-
-    session.headers.update(
-        {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/128.0.0.0 Safari/537.36"
-            ),
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
-        }
-    )
-
     base_url = "https://www.filamentmarketim.com"
-    target_categories = [
-        "/pla-filament",
-        "/petg-filament",
-        "/abs-filament",
-        "/tpu-flex-filament",
+
+    # İdeasoft Altyapısının Gerçek XML / Varyant Döküm Adresleri
+    xml_sources = [
+        f"{base_url}/xml/",
+        f"{base_url}/CustomXml/akakce",
+        f"{base_url}/CustomXml/cimri",
     ]
 
-    for cat in target_categories:
-        for page_number in range(1, 10):
-            try:
-                page_url = f"{base_url}{cat}?tp={page_number}" if page_number > 1 else f"{base_url}{cat}"
-                res = session.get(page_url, timeout=15)
-                if res.status_code != 200:
-                    break
+    session = requests.Session()
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0 Safari/537.36",
+        "Accept": "text/xml, application/xml, */*",
+    })
 
-                soup = BeautifulSoup(res.text, "html.parser")
-                cards = soup.select(
-                    ".product-item, .productItem, .showProductScheme, "
-                    "[class*='product'], .p-card, .product-box, .product-detail-card"
-                )
-
-                if not cards:
-                    break
-
-                for card in cards:
-                    card_text = card.get_text(" ", strip=True).lower()
-                    if "tükendi" in card_text or "stokta yok" in card_text:
-                        continue
-
-                    title_el = card.select_one(".product-title, .productName, h3, a.title, .title, .p-name")
-                    price_el = card.select_one(".product-price, .price, .current-price, .p-price")
-                    link_el = card.find("a", href=True)
-
-                    if not title_el or not price_el or not link_el:
-                        continue
-
-                    title = title_el.get_text(" ", strip=True)
-                    price = clean_price(price_el.get_text(" ", strip=True))
-
-                    if not title or not price or price <= 0:
-                        continue
-
-                    raw_href = link_el["href"].strip()
-                    product_url = urljoin(base_url, raw_href)
-
-                    # Görseli Bul
-                    img_el = card.find("img")
-                    base_img = ""
-                    if img_el:
-                        raw_img = (
-                            img_el.get("data-original")
-                            or img_el.get("data-src")
-                            or img_el.get("src")
-                            or ""
-                        ).strip()
-
-                        if raw_img and "blank" not in raw_img.lower():
-                            if raw_img.startswith("//"): raw_img = "https:" + raw_img
-                            elif not raw_img.startswith("http"): raw_img = urljoin(base_url, raw_img)
-                            base_img = f"https://wsrv.nl/?url={raw_img}"
-
-                    if not base_img:
-                        continue
-
-                    # VARYANT / RENK KARTLARINI SÜZ (Kart İçindeki Alt Renk Seçenekleri)
-                    sub_variants = card.select(".sub-product-item, .variant-box option, [data-subproduct-id], .variant-list a")
-                    
-                    found_sub_variants = 0
-                    if sub_variants:
-                        for v in sub_variants:
-                            v_text = v.get_text(" ", strip=True)
-                            v_id = v.get("value") or v.get("data-subproduct-id") or v.get("data-id") or ""
-                            
-                            if not v_text or "seçiniz" in v_text.lower() or "tükendi" in v_text.lower():
-                                continue
-
-                            clean_v_text = re.sub(r'\s*\([^)]*\)', '', v_text).strip()
-                            full_name = f"{title} {clean_v_text}" if clean_v_text.casefold() not in title.casefold() else title
-                            
-                            var_url = f"{product_url}?subProduct={v_id}" if v_id else product_url
-                            norm_url = var_url.split("?")[0] + (f"?subProduct={v_id}" if v_id else "")
-
-                            if norm_url in seen_urls or not is_valid(full_name):
-                                continue
-
-                            seen_urls.add(norm_url)
-                            items.append({
-                                "source": "Filament Marketim",
-                                "external_id": v_id or norm_url.split("/")[-1],
-                                "name": full_name,
-                                "price": price,
-                                "old_price": None,
-                                "in_stock": 1,
-                                "weight_g": 1000,
-                                "url": var_url,
-                                "image": base_img,
-                            })
-                            found_sub_variants += 1
-
-                    # Eğer kart içinde ayrı alt varyant yoksa doğrudan ana ürünü kaydet
-                    if found_sub_variants == 0:
-                        norm_url = product_url.split("?")[0].rstrip("/")
-                        if norm_url not in seen_urls and is_valid(title):
-                            seen_urls.add(norm_url)
-                            items.append({
-                                "source": "Filament Marketim",
-                                "external_id": norm_url.split("/")[-1],
-                                "name": title,
-                                "price": price,
-                                "old_price": None,
-                                "in_stock": 1,
-                                "weight_g": 1000,
-                                "url": product_url,
-                                "image": base_img,
-                            })
-
-            except Exception as e:
-                print(f"[Filament Marketim] {cat} Hatası: {e}", flush=True)
+    xml_data = None
+    for src in xml_sources:
+        try:
+            r = session.get(src, timeout=25)
+            if r.status_code == 200 and len(r.text) > 500:
+                xml_data = r.text
+                print(f"[Filament Marketim] Başarılı XML akışı bağlandı: {src}", flush=True)
                 break
+        except Exception:
+            continue
 
-    print(f"[Filament Marketim] Toplam {len(items)} adet stoklu filament kaydı başarıyla oluşturuldu.", flush=True)
+    if not xml_data:
+        print("[Filament Marketim Error] XML Akışları Çekilemedi!", flush=True)
+        return items
+
+    try:
+        # XML namespace temizliği
+        xml_clean = re.sub(r'\sxmlns="[^"]+"', '', xml_data, count=1)
+        root = ET.fromstring(xml_clean.encode('utf-8'))
+
+        # Düğümleri (items / products) tarama
+        nodes = root.findall(".//item") or root.findall(".//product") or root.findall(".//urun")
+
+        for p in nodes:
+            # İsmi Ayıkla (Her renk seçeneğinin ismi örn: "Sunlu PLA Filament - Siyah" olarak gelir)
+            title_node = p.find("title") or p.find("name") or p.find("urunAdi") or p.find("UrunAdi")
+            title = title_node.text.strip() if title_node is not None and title_node.text else ""
+
+            if not title or not is_valid(title):
+                continue
+
+            # Linki Ayıkla
+            link_node = p.find("link") or p.find("url") or p.find("urunUrl") or p.find("UrunUrl")
+            raw_link = link_node.text.strip() if link_node is not None and link_node.text else ""
+            if not raw_link:
+                continue
+
+            p_url = urljoin(base_url, raw_link)
+            norm_url = p_url.strip()
+
+            if norm_url in seen_urls:
+                continue
+
+            # Fiyatı Ayıkla
+            price_node = p.find("price") or p.find("satisFiyati") or p.find("SatisFiyati") or p.find("fiyat")
+            raw_price = price_node.text.strip() if price_node is not None and price_node.text else ""
+            price = clean_price(raw_price)
+
+            if not price or price <= 0:
+                continue
+
+            # Stok Kontrolü
+            stock_node = p.find("stok") or p.find("stock") or p.find("availability") or p.find("stokAdedi") or p.find("StokAdedi")
+            stock_val = stock_node.text.strip().lower() if stock_node is not None and stock_node.text else ""
+
+            if stock_val in ["0", "false", "out of stock", "out_of_stock", "yok", "tükendi"]:
+                continue
+
+            # Görsel URL'sini Ayıkla
+            img_node = p.find("image_link") or p.find("image") or p.find("resim") or p.find("Resim1") or p.find("Resim")
+            raw_img = img_node.text.strip() if img_node is not None and img_node.text else ""
+
+            if not raw_img or "blank" in raw_img.lower() or raw_img.endswith(".svg"):
+                continue
+
+            if raw_img.startswith("//"):
+                raw_img = "https:" + raw_img
+            elif not raw_img.startswith("http"):
+                raw_img = urljoin(base_url, raw_img)
+
+            img_url = f"https://wsrv.nl/?url={raw_img}"
+
+            seen_urls.add(norm_url)
+            items.append({
+                "source": "Filament Marketim",
+                "external_id": norm_url.split("/")[-1],
+                "name": title,
+                "price": price,
+                "old_price": None,
+                "in_stock": 1,
+                "weight_g": 1000,
+                "url": p_url,
+                "image": img_url,
+            })
+
+    except Exception as parse_err:
+        print(f"[Filament Marketim Error] XML Parse Hatası: {parse_err}", flush=True)
+
+    print(f"[Filament Marketim] Toplam {len(items)} adet bağımsız renk/varyant filamenti XML'den çekildi.", flush=True)
     return items
 
 
