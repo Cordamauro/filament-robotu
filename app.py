@@ -274,10 +274,13 @@ def save_items(items: list[dict]) -> int:
             price = product.get("price")
             image = product.get("image", "").strip()
 
+            # STOKSUZ, RESİMSİZ VEYA RESMİ KIRIK ÜRÜNLER KESİNLİKLE KAYDEDİLEMEZ!
             if (
                 not name
                 or price is None
                 or price <= 0
+                or not image
+                or "blank" in image.lower()
                 or not is_valid(name)
             ):
                 continue
@@ -458,7 +461,6 @@ def fetch_robotistan() -> list[dict]:
 
     session = requests.Session()
 
-    # Robotistan için anti-bot engellerini aşacak tam tarayıcı başlıkları
     session.headers.update(
         {
             "User-Agent": (
@@ -729,13 +731,19 @@ def fetch_3dcim() -> list[dict]:
                     card_html = str(card).lower()
                     card_text = card.get_text(" ", strip=True).lower()
 
+                    # 1. KATI STOK KONTROLÜ: Yazı veya CSS ile stoksuz tespiti
                     if (
                         "stokta yok" in card_text
                         or "tükendi" in card_text
                         or "out-of-stock" in card_html
                         or "stoktayok" in card_html
-                        or card.select_one(".out-of-stock, .stokYok, .sold-out")
+                        or card.select_one(".out-of-stock, .stokYok, .sold-out, .tukenText")
                     ):
+                        continue
+
+                    # 2. SATIN ALMA BUTONU KONTROLÜ: Sepete Ekle / Detay Butonu Yoksa STOKSUZDUR!
+                    buy_button = card.select_one(".btnSepeteEkle, .myBasketBtn, [class*='basket'], [class*='Basket']")
+                    if not buy_button and "sepete ekle" not in card_text:
                         continue
 
                     title_element = card.select_one(
@@ -787,7 +795,13 @@ def fetch_3dcim() -> list[dict]:
                             or ""
                         ).strip()
 
-                        if raw_image and not raw_image.endswith(".svg") and "blank" not in raw_image:
+                        # 3. KATI RESİM KONTROLÜ: Resim yoksa veya yüklenmemişse KESİNLİKLE STOKSUZDUR!
+                        if (
+                            raw_image 
+                            and not raw_image.endswith(".svg") 
+                            and "blank" not in raw_image.lower()
+                            and "no-image" not in raw_image.lower()
+                        ):
                             if raw_image.startswith("//"):
                                 full_img_url = "https:" + raw_image
                             elif raw_image.startswith("http"):
@@ -796,6 +810,10 @@ def fetch_3dcim() -> list[dict]:
                                 full_img_url = urljoin(base_url, raw_image)
 
                             image_url = f"https://wsrv.nl/?url={full_img_url}"
+
+                    # Resmi tam çekilemeyen hiçbir ürünü alma!
+                    if not image_url:
+                        continue
 
                     seen_urls.add(normalized_url)
 
@@ -870,6 +888,10 @@ def run_update():
             tcim_count = save_items(tcim_items)
             print(f"[3dcim] -> {tcim_count} benzersiz ürün kaydedildi.", flush=True)
 
+        # Veritabanında resimsiz/bozuk kalmış eski stoksuz verileri tamamen temizle!
+        with db() as connection:
+            connection.execute("DELETE FROM products WHERE image IS NULL OR image = '' OR image LIKE '%blank%'")
+
         print(">>> TARAMA TAMAMLANDI <<<", flush=True)
 
     except Exception as error:
@@ -887,7 +909,7 @@ def index():
 @app.get("/api/products")
 def products():
     search_query = request.args.get("q", "").strip()
-    filters = ["in_stock = 1"]
+    filters = ["in_stock = 1", "image IS NOT NULL", "image != ''", "image NOT LIKE '%blank%'"]
     parameters = []
 
     for field in ("brand", "material", "color", "source"):
@@ -950,6 +972,7 @@ def filters():
                 WHERE {field} IS NOT NULL
                   AND {field} != ''
                   AND in_stock = 1
+                  AND image IS NOT NULL AND image != ''
                 ORDER BY {field}
             """
 
@@ -959,7 +982,7 @@ def filters():
             """
             SELECT COUNT(*)
             FROM products
-            WHERE in_stock = 1
+            WHERE in_stock = 1 AND image IS NOT NULL AND image != ''
             """
         ).fetchone()[0]
 
