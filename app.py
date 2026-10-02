@@ -675,7 +675,7 @@ def fetch_robotistan() -> list[dict]:
     return items
 
 
-# FİLAMENT MARKETİM KESİN ARAMA / API SORGULAMA SİSTEMİ
+# FİLAMENT MARKETİM (İDEASOFT KATEGORİ VE KART TARAMA MOTORU)
 def fetch_filamentmarketim() -> list[dict]:
     items = []
     seen_urls = set()
@@ -688,71 +688,123 @@ def fetch_filamentmarketim() -> list[dict]:
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/128.0.0.0 Safari/537.36"
             ),
-            "Accept": "application/json, text/javascript, */*; q=0.01",
-            "X-Requested-With": "XMLHttpRequest",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
         }
     )
 
     base_url = "https://www.filamentmarketim.com"
-    search_keywords = ["filament", "pla", "petg", "abs", "tpu", "esun", "porima", "microzey", "r3d"]
+    target_categories = [
+        "/pla-filament",
+        "/petg-filament",
+        "/abs-filament",
+        "/tpu-flex-filament",
+    ]
 
-    for kw in search_keywords:
-        for pg in range(1, 15):
+    for cat in target_categories:
+        for page_number in range(1, 15):
             try:
-                # İdeasoft Canlı Arama Endpoint'i
-                api_url = f"{base_url}/srv/service/product/get-list?q={kw}&page={pg}"
-                resp = session.get(api_url, timeout=15)
+                # İdeasoft sayfalama mantığı (tp=1, tp=2...)
+                page_url = f"{base_url}{cat}?tp={page_number}" if page_number > 1 else f"{base_url}{cat}"
+                res = session.get(page_url, timeout=20)
 
-                if resp.status_code == 200:
-                    try:
-                        data = resp.json()
-                        products = data.get("data") or data.get("products") or []
-                        if not products:
-                            break
-
-                        for p in products:
-                            title = p.get("title") or p.get("name") or ""
-                            p_url = p.get("url") or p.get("link") or ""
-                            price = clean_price(p.get("price") or p.get("price_discounted"))
-                            img = p.get("image") or p.get("img") or ""
-                            in_stock = p.get("in_stock", True) or (p.get("stock", 1) > 0)
-
-                            if not title or not p_url or not in_stock:
-                                continue
-
-                            full_url = urljoin(base_url, p_url)
-                            norm_url = full_url.split("?")[0].rstrip("/")
-
-                            if norm_url in seen_urls or not is_valid(title):
-                                continue
-
-                            if img:
-                                if img.startswith("//"):
-                                    img = "https:" + img
-                                elif not img.startswith("http"):
-                                    img = urljoin(base_url, img)
-                                img = f"https://wsrv.nl/?url={img}"
-
-                            if not img or "blank" in img.lower():
-                                continue
-
-                            seen_urls.add(norm_url)
-                            items.append({
-                                "source": "Filament Marketim",
-                                "external_id": norm_url.split("/")[-1],
-                                "name": title,
-                                "price": price,
-                                "old_price": None,
-                                "in_stock": 1,
-                                "weight_g": 1000,
-                                "url": full_url,
-                                "image": img,
-                            })
-                    except Exception:
-                        break
-                else:
+                if res.status_code != 200:
+                    print(f"[FM Log] {cat} HTTP {res.status_code}", flush=True)
                     break
-            except Exception:
+
+                soup = BeautifulSoup(res.text, "html.parser")
+                
+                # İdeasoft temalarındaki tüm olası ürün kartı seçicileri
+                cards = soup.select(
+                    ".product-item, .productItem, .showProductScheme, "
+                    "[class*='product'], .p-card, .product-box, .product-detail-card, .ItemOrj"
+                )
+
+                if not cards:
+                    print(f"[FM Log] {cat} Sayfa {page_number}: Kart bulunamadı.", flush=True)
+                    break
+
+                new_on_page = 0
+
+                for card in cards:
+                    card_text = card.get_text(" ", strip=True).lower()
+                    if "tükendi" in card_text or "stokta yok" in card_text:
+                        continue
+
+                    title_el = card.select_one(".product-title, .productName, h3, a.title, .title, .p-name, [class*='name']")
+                    link_el = card.find("a", href=True)
+                    price_el = card.select_one(".product-price, .price, .current-price, .p-price, [class*='price']")
+
+                    if not title_el or not link_el or not price_el:
+                        continue
+
+                    title = title_el.get_text(" ", strip=True)
+                    if not title or not is_valid(title):
+                        continue
+
+                    price = clean_price(price_el.get_text(" ", strip=True))
+                    if price is None or price <= 0:
+                        continue
+
+                    raw_href = link_el.get("href", "").strip()
+                    if not raw_href:
+                        continue
+
+                    product_url = urljoin(base_url, raw_href)
+                    normalized_url = product_url.split("?")[0].rstrip("/")
+
+                    if normalized_url in seen_urls:
+                        continue
+
+                    image_element = card.find("img")
+                    image_url = ""
+
+                    if image_element:
+                        raw_image = (
+                            image_element.get("data-original")
+                            or image_element.get("data-src")
+                            or image_element.get("data-lazy")
+                            or image_element.get("src")
+                            or ""
+                        ).strip()
+
+                        if raw_image and "blank" not in raw_image.lower() and not raw_image.endswith(".svg"):
+                            if raw_image.startswith("//"):
+                                full_img_url = "https:" + raw_image
+                            elif raw_image.startswith("http"):
+                                full_img_url = raw_image
+                            else:
+                                full_img_url = urljoin(base_url, raw_image)
+
+                            image_url = f"https://wsrv.nl/?url={full_img_url}"
+
+                    if not image_url:
+                        continue
+
+                    seen_urls.add(normalized_url)
+
+                    items.append(
+                        {
+                            "source": "Filament Marketim",
+                            "external_id": normalized_url.rstrip("/").split("/")[-1],
+                            "name": title,
+                            "price": price,
+                            "old_price": None,
+                            "in_stock": 1,
+                            "weight_g": 1000,
+                            "url": product_url,
+                            "image": image_url,
+                        }
+                    )
+                    new_on_page += 1
+
+                print(f"[FM Log] {cat} Sayfa {page_number}: {new_on_page} yeni stoklu filament.", flush=True)
+
+                if new_on_page == 0:
+                    break
+
+            except Exception as error:
+                print(f"[Filament Marketim] Kategori {cat} Sayfa {page_number} hatası: {error}", flush=True)
                 break
 
     print(f"[Filament Marketim] Toplam {len(items)} stoklu filament bulundu.", flush=True)
