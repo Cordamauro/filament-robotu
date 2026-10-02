@@ -48,7 +48,7 @@ COLOR_MAPPING = [
     (r"sarı|sari|yellow|hardal", "Sarı"),
     (r"turuncu|orange", "Turuncu"),
     (r"siyah|black|antrasit", "Siyah"),
-    (r"gri|grey|gray", "Gri"),
+    (r"gri|grey|gray|beton", "Gri"),
     (r"kırmızı|kirmizi|red|mercan", "Kırmızı"),
     (r"altın|gold|bronz", "Altın"),
     (r"şeffaf|seffaf|clear|natural", "Şeffaf"),
@@ -245,7 +245,7 @@ def detect_color(name: str) -> str:
         if re.search(pattern, name_lower, re.IGNORECASE):
             return color
 
-    return "Mavi"
+    return "Gri" if "beton" in name_lower else "Mavi"
 
 
 def detect_material(name: str) -> str:
@@ -274,12 +274,10 @@ def save_items(items: list[dict]) -> int:
             price = product.get("price")
             image = product.get("image", "").strip()
 
-            # Resimsiz veya stoksuz ürün kesinlikle veritabanına giremez!
             if (
                 not name
                 or price is None
                 or price <= 0
-                or not image
                 or not is_valid(name)
             ):
                 continue
@@ -418,9 +416,6 @@ def fetch_porima() -> list[dict]:
                         and variant_image.startswith("//")
                     ):
                         variant_image = "https:" + variant_image
-
-                    if not variant_image:
-                        continue
 
                     items.append(
                         {
@@ -605,9 +600,6 @@ def fetch_robotistan() -> list[dict]:
 
                         image_url = f"https://wsrv.nl/?url={full_img_url}"
 
-                if not image_url:
-                    continue
-
                 seen_urls.add(normalized_url)
 
                 items.append(
@@ -676,34 +668,30 @@ def fetch_3dcim() -> list[dict]:
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
             "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
             "Cache-Control": "max-age=0",
-            "Sec-Ch-Ua": '"Chromium";v="128", "Not=A?Brand";v="24", "Google Chrome";v="128"',
-            "Sec-Ch-Ua-Mobile": "?0",
-            "Sec-Ch-Ua-Platform": '"Windows"',
-            "Sec-Fetch-Dest": "document",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "none",
-            "Sec-Fetch-User": "?1",
             "Upgrade-Insecure-Requests": "1",
         }
     )
 
     base_url = "https://www.3dcim.com"
 
+    # Tüm renk varyantlarını (Beton Gri dahil) ve kategori ürünlerini derinlemesine tarama
     categories = [
         "/3d-yazici-filament-cesitleri",
         "/pla-filamentler",
+        "/esun-pla-basic-filament",
+        "/esun-pla-plus-filamentler",
         "/petg-filamentler",
         "/abs-filamentler",
         "/tpu-flex-filamentler",
     ]
 
     for cat_path in categories:
-        for page_number in range(1, 15):
+        for page_number in range(1, 20):
             try:
                 if page_number == 1:
-                    page_url = f"{base_url}{cat_path}"
+                    page_url = f"{base_url}{cat_path}?srt=1"
                 else:
-                    page_url = f"{base_url}{cat_path}?pg={page_number}"
+                    page_url = f"{base_url}{cat_path}?pg={page_number}&srt=1"
 
                 response = session.get(page_url, timeout=20)
 
@@ -725,14 +713,13 @@ def fetch_3dcim() -> list[dict]:
                     card_html = str(card).lower()
                     card_text = card.get_text(" ", strip=True).lower()
 
-                    # Stokta olmayan veya "Tükendi" ibaresi barındıran ürünleri sıkı şekilde ele
+                    # Sadece GERÇEKTEN Tükendi/Stokta Yok olanları filtrele
                     if (
                         "stokta yok" in card_text
                         or "tükendi" in card_text
                         or "out-of-stock" in card_html
                         or "stoktayok" in card_html
-                        or "tuken-text" in card_html
-                        or card.select_one(".out-of-stock, .stokYok, .sold-out, .tukenText")
+                        or card.select_one(".out-of-stock, .stokYok, .sold-out")
                     ):
                         continue
 
@@ -777,7 +764,6 @@ def fetch_3dcim() -> list[dict]:
                     image_element = card.find("img")
                     image_url = ""
                     if image_element:
-                        # Ticimax lazy-loading resim adreslerini yakalama
                         raw_image = (
                             image_element.get("data-original")
                             or image_element.get("data-src")
@@ -795,10 +781,6 @@ def fetch_3dcim() -> list[dict]:
                                 full_img_url = urljoin(base_url, raw_image)
 
                             image_url = f"https://wsrv.nl/?url={full_img_url}"
-
-                    # Görseli olmayan (stokta olmadığı için resmi yüklenmeyen) ürünleri ekleme!
-                    if not image_url:
-                        continue
 
                     seen_urls.add(normalized_url)
 
@@ -839,7 +821,6 @@ def run_update():
     print(">>> TARAMA BAŞLADI <<<", flush=True)
 
     try:
-        # Sitenin her zaman %100 güncel kalması için tarama başında eski/stoksuz kayıtları temizliyoruz
         with db() as connection:
             for term in EXCLUDE_TERMS:
                 connection.execute(
@@ -849,8 +830,6 @@ def run_update():
                     """,
                     (f"%{term.casefold()}%",),
                 )
-            # Görseli olmayan veya hatalı eski veritabanı kayıtlarını tamamen temizle
-            connection.execute("DELETE FROM products WHERE image IS NULL OR image = ''")
 
         # 1. Porima Taraması
         porima_items = fetch_porima()
@@ -893,7 +872,7 @@ def index():
 @app.get("/api/products")
 def products():
     search_query = request.args.get("q", "").strip()
-    filters = ["in_stock = 1", "image IS NOT NULL", "image != ''"]
+    filters = ["in_stock = 1"]
     parameters = []
 
     for field in ("brand", "material", "color", "source"):
@@ -956,7 +935,6 @@ def filters():
                 WHERE {field} IS NOT NULL
                   AND {field} != ''
                   AND in_stock = 1
-                  AND image IS NOT NULL AND image != ''
                 ORDER BY {field}
             """
 
@@ -966,7 +944,7 @@ def filters():
             """
             SELECT COUNT(*)
             FROM products
-            WHERE in_stock = 1 AND image IS NOT NULL AND image != ''
+            WHERE in_stock = 1
             """
         ).fetchone()[0]
 
