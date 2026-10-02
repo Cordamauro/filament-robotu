@@ -657,129 +657,147 @@ def fetch_3dcim() -> list[dict]:
     seen_urls = set()
 
     session = requests.Session()
+    # 3dcim Cloudflare engelini aşmak için gerçek tarayıcı istek başlığı
     session.headers.update(
         {
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/124.0.0.0 Safari/537.36"
+                "Chrome/128.0.0.0 Safari/537.36"
             ),
-            "Accept": (
-                "text/html,application/xhtml+xml,"
-                "application/xml;q=0.9,*/*;q=0.8"
-            ),
-            "Accept-Language": "tr-TR,tr;q=0.9,en;q=0.8",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Cache-Control": "max-age=0",
+            "Sec-Ch-Ua": '"Chromium";v="128", "Not=A?Brand";v="24", "Google Chrome";v="128"',
+            "Sec-Ch-Ua-Mobile": "?0",
+            "Sec-Ch-Ua-Platform": '"Windows"',
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-User": "?1",
+            "Upgrade-Insecure-Requests": "1",
         }
     )
 
-    base_url = "https://3dcim.com"
+    base_url = "https://www.3dcim.com"
 
-    for page_number in range(1, 50):
-        try:
-            # 3dcim gerçek filament kategori adresi: /3d-yazici-filament-cesitleri
-            if page_number == 1:
-                page_url = f"{base_url}/3d-yazici-filament-cesitleri"
-            else:
-                page_url = f"{base_url}/3d-yazici-filament-cesitleri?pg={page_number}"
+    # Sitede taranacak 3D Filament kategorileri
+    categories = [
+        "/3d-yazici-filament-cesitleri",
+        "/pla-filamentler",
+        "/petg-filamentler",
+        "/abs-filamentler",
+        "/tpu-flex-filamentler",
+    ]
 
-            response = session.get(page_url, timeout=20)
-
-            if response.status_code != 200:
-                break
-
-            soup = BeautifulSoup(response.text, "html.parser")
-            cards = soup.select(
-                ".product-item, .productItem, .product-box, [class*='product'], .p-card"
-            )
-
-            if not cards:
-                break
-
-            new_products_on_page = 0
-
-            for card in cards:
-                title_element = card.select_one(
-                    ".product-title, .productName, h3, a.title, .p-name, .title"
-                )
-                if not title_element:
-                    continue
-
-                title = title_element.get_text(" ", strip=True)
-                if not title or not is_valid(title):
-                    continue
-
-                if title_element.name == "a" and title_element.get("href"):
-                    link_element = title_element
+    for cat_path in categories:
+        for page_number in range(1, 15):
+            try:
+                if page_number == 1:
+                    page_url = f"{base_url}{cat_path}"
                 else:
-                    link_element = card.find("a", href=True)
+                    page_url = f"{base_url}{cat_path}?pg={page_number}"
 
-                if not link_element:
-                    continue
+                response = session.get(page_url, timeout=20)
 
-                raw_url = link_element.get("href", "").strip()
-                if not raw_url:
-                    continue
+                if response.status_code != 200:
+                    break
 
-                product_url = urljoin(base_url, raw_url)
-                normalized_url = product_url.split("?")[0].rstrip("/")
-
-                if normalized_url in seen_urls:
-                    continue
-
-                price_element = card.select_one(
-                    ".product-price, .current-price, .price, .p-price, [class*='price']"
+                soup = BeautifulSoup(response.text, "html.parser")
+                
+                # Ticimax E-Ticaret altyapısına özel genişletilmiş seçiciler
+                cards = soup.select(
+                    ".product-item, .productItem, .product-box, [class*='product'], .p-card, .ItemOrj"
                 )
-                price = None
-                if price_element:
-                    price = clean_price(price_element.get_text(" ", strip=True))
 
-                if price is None or price <= 0:
-                    continue
+                if not cards:
+                    break
 
-                image_element = card.find("img")
-                image_url = ""
-                if image_element:
-                    raw_image = (
-                        image_element.get("data-original")
-                        or image_element.get("data-src")
-                        or image_element.get("data-lazy")
-                        or image_element.get("src")
-                        or ""
-                    ).strip()
+                new_products_on_page = 0
 
-                    if raw_image:
-                        if raw_image.startswith("//"):
-                            full_img_url = "https:" + raw_image
-                        elif raw_image.startswith("http"):
-                            full_img_url = raw_image
-                        else:
-                            full_img_url = urljoin(base_url, raw_image)
+                for card in cards:
+                    title_element = card.select_one(
+                        ".product-title, .productName, h3, a.title, .p-name, .title, [class*='Name']"
+                    )
+                    if not title_element:
+                        continue
 
-                        image_url = f"https://wsrv.nl/?url={full_img_url}"
+                    title = title_element.get_text(" ", strip=True)
+                    if not title or not is_valid(title):
+                        continue
 
-                seen_urls.add(normalized_url)
+                    if title_element.name == "a" and title_element.get("href"):
+                        link_element = title_element
+                    else:
+                        link_element = card.find("a", href=True)
 
-                items.append(
-                    {
-                        "source": "3dcim",
-                        "external_id": normalized_url.rstrip("/").split("/")[-1],
-                        "name": title,
-                        "price": price,
-                        "old_price": None,
-                        "in_stock": 1,
-                        "weight_g": 1000,
-                        "url": product_url,
-                        "image": image_url,
-                    }
-                )
-                new_products_on_page += 1
+                    if not link_element:
+                        continue
 
-            if new_products_on_page == 0:
+                    raw_url = link_element.get("href", "").strip()
+                    if not raw_url:
+                        continue
+
+                    product_url = urljoin(base_url, raw_url)
+                    normalized_url = product_url.split("?")[0].rstrip("/")
+
+                    if normalized_url in seen_urls:
+                        continue
+
+                    price_element = card.select_one(
+                        ".product-price, .current-price, .price, .p-price, [class*='Price'], [class*='price']"
+                    )
+                    price = None
+                    if price_element:
+                        price = clean_price(price_element.get_text(" ", strip=True))
+
+                    if price is None or price <= 0:
+                        continue
+
+                    image_element = card.find("img")
+                    image_url = ""
+                    if image_element:
+                        raw_image = (
+                            image_element.get("data-original")
+                            or image_element.get("data-src")
+                            or image_element.get("data-lazy")
+                            or image_element.get("src")
+                            or ""
+                        ).strip()
+
+                        if raw_image:
+                            if raw_image.startswith("//"):
+                                full_img_url = "https:" + raw_image
+                            elif raw_image.startswith("http"):
+                                full_img_url = raw_image
+                            else:
+                                full_img_url = urljoin(base_url, raw_image)
+
+                            image_url = f"https://wsrv.nl/?url={full_img_url}"
+
+                    seen_urls.add(normalized_url)
+
+                    items.append(
+                        {
+                            "source": "3dcim",
+                            "external_id": normalized_url.rstrip("/").split("/")[-1],
+                            "name": title,
+                            "price": price,
+                            "old_price": None,
+                            "in_stock": 1,
+                            "weight_g": 1000,
+                            "url": product_url,
+                            "image": image_url,
+                        }
+                    )
+                    new_products_on_page += 1
+
+                if new_products_on_page == 0:
+                    break
+
+            except Exception as error:
+                print(f"[3dcim] Kategori {cat_path} Sayfa {page_number} hatası: {error}", flush=True)
                 break
-
-        except Exception as error:
-            print(f"[3dcim] Sayfa {page_number} hatası: {error}", flush=True)
-            break
 
     print(f"[3dcim] Toplam {len(items)} ürün bulundu.", flush=True)
     return items
