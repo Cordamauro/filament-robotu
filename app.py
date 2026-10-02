@@ -159,6 +159,7 @@ KNOWN_BRANDS = [
     "Fibromast",
     "Robotistan",
     "tinylab",
+    "3dcim",
 ]
 
 
@@ -470,11 +471,8 @@ def fetch_robotistan() -> list[dict]:
 
     base_url = "https://www.robotistan.com"
 
-    # Robotistan şu anda sayfa başına 32 ürün gösteriyor.
-    # 100 sayfa sınırı yaklaşık 3.200 ürün kapasitesi sağlar.
     for page_number in range(1, 101):
         try:
-            # Önemli: Robotistan "sayfa" değil "pg" kullanıyor.
             page_url = (
                 f"{base_url}/3d-filament?pg={page_number}"
             )
@@ -524,7 +522,6 @@ def fetch_robotistan() -> list[dict]:
                 if not title or not is_valid(title):
                     continue
 
-                # Önce ürün başlığına bağlı bağlantıyı almaya çalış.
                 if (
                     title_element.name == "a"
                     and title_element.get("href")
@@ -536,7 +533,6 @@ def fetch_robotistan() -> list[dict]:
                         href=True,
                     )
 
-                # Başlıkta bağlantı yoksa ürün kartındaki bağlantıyı al.
                 if not link_element:
                     link_element = card.select_one(
                         "a.product-link[href], "
@@ -553,8 +549,6 @@ def fetch_robotistan() -> list[dict]:
                     continue
 
                 product_url = urljoin(base_url, raw_url)
-
-                # Takip parametrelerini kaldırarak benzersiz URL oluştur.
                 normalized_url = product_url.split("?")[0].rstrip("/")
 
                 if normalized_url in seen_urls:
@@ -600,7 +594,6 @@ def fetch_robotistan() -> list[dict]:
                         else:
                             full_img_url = urljoin(base_url, raw_image)
 
-                        # Robotistan hotlink engelini aşmak için proxy kullanımı
                         image_url = f"https://wsrv.nl/?url={full_img_url}"
 
                 seen_urls.add(normalized_url)
@@ -631,7 +624,6 @@ def fetch_robotistan() -> list[dict]:
                 flush=True,
             )
 
-            # Son sayfadan sonra aynı içerik dönerse döngüyü durdur.
             if new_products_on_page == 0:
                 print(
                     "[Robotistan] Yeni ürün kalmadı, "
@@ -657,6 +649,130 @@ def fetch_robotistan() -> list[dict]:
     return items
 
 
+def fetch_3dcim() -> list[dict]:
+    items = []
+    seen_urls = set()
+
+    session = requests.Session()
+    session.headers.update(
+        {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            ),
+            "Accept": (
+                "text/html,application/xhtml+xml,"
+                "application/xml;q=0.9,*/*;q=0.8"
+            ),
+            "Accept-Language": "tr-TR,tr;q=0.9,en;q=0.8",
+        }
+    )
+
+    base_url = "https://www.3dcim.com"
+
+    for page_number in range(1, 25):
+        try:
+            page_url = f"{base_url}/filament?sayfa={page_number}"
+            response = session.get(page_url, timeout=20)
+
+            if response.status_code != 200:
+                break
+
+            soup = BeautifulSoup(response.text, "html.parser")
+            cards = soup.select(
+                ".product-item, .productItem, .product-box, [class*='product']"
+            )
+
+            if not cards:
+                break
+
+            new_products_on_page = 0
+
+            for card in cards:
+                title_element = card.select_one(
+                    ".product-title, .productName, h3, a.title, .p-name"
+                )
+                if not title_element:
+                    continue
+
+                title = title_element.get_text(" ", strip=True)
+                if not title or not is_valid(title):
+                    continue
+
+                link_element = card.find("a", href=True)
+                if not link_element:
+                    continue
+
+                raw_url = link_element.get("href", "").strip()
+                if not raw_url:
+                    continue
+
+                product_url = urljoin(base_url, raw_url)
+                normalized_url = product_url.split("?")[0].rstrip("/")
+
+                if normalized_url in seen_urls:
+                    continue
+
+                price_element = card.select_one(
+                    ".product-price, .current-price, .price, .p-price"
+                )
+                price = None
+                if price_element:
+                    price = clean_price(price_element.get_text(" ", strip=True))
+
+                if price is None or price <= 0:
+                    continue
+
+                image_element = card.find("img")
+                image_url = ""
+                if image_element:
+                    raw_image = (
+                        image_element.get("data-original")
+                        or image_element.get("data-src")
+                        or image_element.get("data-lazy")
+                        or image_element.get("src")
+                        or ""
+                    ).strip()
+
+                    if raw_image:
+                        if raw_image.startswith("//"):
+                            full_img_url = "https:" + raw_image
+                        elif raw_image.startswith("http"):
+                            full_img_url = raw_image
+                        else:
+                            full_img_url = urljoin(base_url, raw_image)
+
+                        image_url = f"https://wsrv.nl/?url={full_img_url}"
+
+                seen_urls.add(normalized_url)
+
+                items.append(
+                    {
+                        "source": "3dcim",
+                        "external_id": normalized_url.rstrip("/").split("/")[-1],
+                        "name": title,
+                        "price": price,
+                        "old_price": None,
+                        "in_stock": 1,
+                        "weight_g": 1000,
+                        "url": product_url,
+                        "image": image_url,
+                    }
+                )
+                new_products_on_page += 1
+
+            if new_products_on_page == 0:
+                break
+
+        except Exception as error:
+            print(f"[3dcim] Sayfa {page_number} hatası: {error}", flush=True)
+            break
+
+    print(f"[3dcim] Toplam {len(items)} ürün bulundu.", flush=True)
+    return items
+
+
 def run_update():
     if not update_lock.acquire(blocking=False):
         print(
@@ -668,7 +784,6 @@ def run_update():
     print(">>> TARAMA BAŞLADI <<<", flush=True)
 
     try:
-        # Önceden kalmış aksesuar ve cihazları temizle.
         with db() as connection:
             for term in EXCLUDE_TERMS:
                 connection.execute(
@@ -699,8 +814,6 @@ def run_update():
         robotistan_items = fetch_robotistan()
 
         if robotistan_items:
-            # Başarılı taramadan sonra eski Robotistan kayıtlarını sil.
-            # Böylece artık stokta olmayan ürünler listede kalmaz.
             with db() as connection:
                 connection.execute(
                     """
@@ -720,9 +833,34 @@ def run_update():
                 flush=True,
             )
         else:
-            # Site geçici olarak erişilemezse eski kayıtları silme.
             print(
                 "[Robotistan] Ürün bulunamadı; "
+                "mevcut kayıtlar korundu.",
+                flush=True,
+            )
+
+        tcim_items = fetch_3dcim()
+
+        if tcim_items:
+            with db() as connection:
+                connection.execute(
+                    """
+                    DELETE FROM products
+                    WHERE source = ?
+                    """,
+                    ("3dcim",),
+                )
+
+            tcim_count = save_items(tcim_items)
+
+            print(
+                f"[3dcim] -> "
+                f"{tcim_count} benzersiz ürün kaydedildi.",
+                flush=True,
+            )
+        else:
+            print(
+                "[3dcim] Ürün bulunamadı; "
                 "mevcut kayıtlar korundu.",
                 flush=True,
             )
@@ -782,6 +920,14 @@ def products():
         ):
             filters.append(
                 "LOWER(source) LIKE '%robotistan%'"
+            )
+
+        elif (
+            field == "source"
+            and "3dcim" in value.casefold()
+        ):
+            filters.append(
+                "LOWER(source) LIKE '%3dcim%'"
             )
 
         else:
