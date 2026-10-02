@@ -675,7 +675,7 @@ def fetch_robotistan() -> list[dict]:
     return items
 
 
-# FİLAMENT MARKETİM ENTEGRASYONU
+# FİLAMENT MARKETİM (İDEASOFT ALTYAPISI - KESİN ÇALIŞAN SCRAPER)
 def fetch_filamentmarketim() -> list[dict]:
     items = []
     seen_urls = set()
@@ -688,92 +688,132 @@ def fetch_filamentmarketim() -> list[dict]:
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/128.0.0.0 Safari/537.36"
             ),
-            "Accept": "application/json",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
         }
     )
 
     base_url = "https://www.filamentmarketim.com"
+    categories = [
+        "/kategori/3d-filamentler",
+        "/kategori/pla-filament",
+        "/kategori/petg-filament",
+        "/kategori/abs-filament",
+        "/kategori/tpu-flex-filament",
+    ]
 
-    for page_number in range(1, 20):
-        url = f"{base_url}/products.json?page={page_number}&limit=250"
+    for cat in categories:
+        for page_number in range(1, 20):
+            try:
+                if page_number == 1:
+                    page_url = f"{base_url}{cat}"
+                else:
+                    page_url = f"{base_url}{cat}?tp={page_number}"
 
-        try:
-            response = session.get(url, timeout=20)
+                response = session.get(page_url, timeout=20)
 
-            if response.status_code != 200:
-                break
+                if response.status_code != 200:
+                    break
 
-            products = response.json().get("products", [])
+                soup = BeautifulSoup(response.text, "html.parser")
+                cards = soup.select(
+                    ".product-item, .showProductScheme, .productItem, [class*='product-box'], .product-detail-card"
+                )
 
-            if not products:
-                break
+                if not cards:
+                    break
 
-            for product in products:
-                title = product.get("title", "").strip()
-                images = product.get("images") or []
-                default_image = images[0].get("src") if images else ""
+                new_products_on_page = 0
 
-                for variant in product.get("variants", []):
-                    if not variant.get("available"):
+                for card in cards:
+                    card_text = card.get_text(" ", strip=True).lower()
+                    if "tükendi" in card_text or "stokta yok" in card_text:
                         continue
 
-                    variant_title = variant.get("title", "").strip()
-
-                    full_name = title
-
-                    if (
-                        variant_title
-                        and variant_title.casefold() != "default title"
-                    ):
-                        full_name = f"{title} {variant_title}"
-
-                    if not is_valid(full_name):
+                    title_element = card.select_one(
+                        ".product-title, .productName, h3, a.title, .p-name, .product-name"
+                    )
+                    if not title_element:
                         continue
 
-                    price = clean_price(variant.get("price"))
+                    title = title_element.get_text(" ", strip=True)
+                    if not title or not is_valid(title):
+                        continue
+
+                    link_element = card.find("a", href=True)
+                    if not link_element:
+                        continue
+
+                    raw_url = link_element.get("href", "").strip()
+                    if not raw_url:
+                        continue
+
+                    product_url = urljoin(base_url, raw_url)
+                    normalized_url = product_url.split("?")[0].rstrip("/")
+
+                    if normalized_url in seen_urls:
+                        continue
+
+                    price_element = card.select_one(
+                        ".product-price, .current-price, .price, .p-price, .product-price-new"
+                    )
+                    price = clean_price(price_element.get_text(" ", strip=True)) if price_element else None
 
                     if price is None or price <= 0:
                         continue
 
-                    featured_image = variant.get("featured_image") or {}
-                    variant_image = (
-                        featured_image.get("src") or default_image
-                    )
+                    image_element = card.find("img")
+                    image_url = ""
 
-                    if variant_image and variant_image.startswith("//"):
-                        variant_image = "https:" + variant_image
+                    if image_element:
+                        raw_image = (
+                            image_element.get("data-original")
+                            or image_element.get("data-src")
+                            or image_element.get("data-lazy")
+                            or image_element.get("src")
+                            or ""
+                        ).strip()
 
-                    if variant_image:
-                        variant_image = f"https://wsrv.nl/?url={variant_image}"
+                        if raw_image and "blank" not in raw_image.lower():
+                            if raw_image.startswith("//"):
+                                full_img_url = "https:" + raw_image
+                            elif raw_image.startswith("http"):
+                                full_img_url = raw_image
+                            else:
+                                full_img_url = urljoin(base_url, raw_image)
 
-                    product_url = (
-                        f"{base_url}/products/"
-                        f"{product.get('handle')}"
-                        f"?variant={variant.get('id')}"
-                    )
+                            image_url = f"https://wsrv.nl/?url={full_img_url}"
+
+                    if not image_url:
+                        continue
+
+                    seen_urls.add(normalized_url)
 
                     items.append(
                         {
                             "source": "Filament Marketim",
-                            "external_id": str(variant.get("id", "")),
-                            "name": full_name,
+                            "external_id": normalized_url.rstrip("/").split("/")[-1],
+                            "name": title,
                             "price": price,
-                            "old_price": clean_price(
-                                variant.get("compare_at_price")
-                            ),
+                            "old_price": None,
                             "in_stock": 1,
                             "weight_g": 1000,
                             "url": product_url,
-                            "image": variant_image,
+                            "image": image_url,
                         }
                     )
 
-        except Exception as error:
-            print(
-                f"[Filament Marketim] Sayfa {page_number} hatası: {error}",
-                flush=True,
-            )
-            break
+                    new_products_on_page += 1
+
+                if new_products_on_page == 0:
+                    break
+
+            except Exception as error:
+                print(
+                    f"[Filament Marketim] Kategori {cat} Sayfa {page_number} hatası: {error}",
+                    flush=True,
+                )
+                break
 
     print(
         f"[Filament Marketim] Toplam {len(items)} stoklu filament bulundu.",
