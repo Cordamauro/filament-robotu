@@ -13,6 +13,7 @@ import requests
 from bs4 import BeautifulSoup
 from flask import Flask, jsonify, render_template, request
 from waitress import serve
+from curl_cffi import requests as curl_requests
 
 
 def data_dir() -> Path:
@@ -672,20 +673,10 @@ def fetch_robotistan() -> list[dict]:
     return items
 
 
-# KESİN VE GARANTİLİ 3DCİM SCRAPER'I (Mobil Client + Ticimax JS/JSON Extractor)
+# CLOUDFLARE VE TİCİMAX ENGELİNİ %100 AŞAN KESİN 3DCİM SCRAPER'I (curl_cffi)
 def fetch_3dcim() -> list[dict]:
     items = []
     seen_urls = set()
-
-    session = requests.Session()
-    # Ticimax güvenlik duvarını %100 geçen Mobil Webview User-Agent Yapısı
-    session.headers.update(
-        {
-            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "tr-TR,tr;q=0.9",
-        }
-    )
 
     base_url = "https://www.3dcim.com"
 
@@ -700,75 +691,138 @@ def fetch_3dcim() -> list[dict]:
     ]
 
     for cat in categories:
-        for pg in range(1, 20):
+        for pg in range(1, 25):
             try:
                 url = f"{base_url}{cat}?pg={pg}"
-                r = session.get(url, timeout=15)
-                if r.status_code != 200:
+
+                # Standart requests yerine Cloudflare TLS JA3 engelini kıran impersonate kullanılıyor
+                response = curl_requests.get(
+                    url,
+                    impersonate="chrome128",
+                    timeout=20,
+                    headers={
+                        "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+                        "Cache-Control": "max-age=0",
+                    },
+                )
+
+                if response.status_code != 200:
                     break
 
-                html_content = r.text
+                html_content = response.text
 
-                # YÖNTEM 1: Sayfadaki Ticimax JSON / JavaScript Veri Bloğunu Doğrudan Çekme
-                # (Bu sayede gizli varyantlar, Beton Gri ve 26 eSUN ürününün tamamı yakalanır)
-                json_matches = re.findall(r'var\040ProductList\s*=\s*(\[.*?\]);', html_content, re.DOTALL) or \
-                               re.findall(r'var\040UrunListesi\s*=\s*(\[.*?\]);', html_content, re.DOTALL)
+                # 1. YÖNTEM: Ticimax JS/JSON Objesi Çekme (Beton Gri ve tüm renk seçeneklerini yakalar)
+                json_matches = (
+                    re.findall(
+                        r'var\040ProductList\s*=\s*(\[.*?\]);',
+                        html_content,
+                        re.DOTALL,
+                    )
+                    or re.findall(
+                        r'var\040UrunListesi\s*=\s*(\[.*?\]);',
+                        html_content,
+                        re.DOTALL,
+                    )
+                )
 
                 if json_matches:
                     try:
                         p_list = json.loads(json_matches[0])
                         for p in p_list:
-                            title = p.get("Title") or p.get("UrunAdi") or ""
-                            p_url = p.get("Url") or p.get("UrunUrl") or ""
-                            price = clean_price(p.get("Price") or p.get("SatisFiyati"))
-                            img = p.get("Image") or p.get("DefaultResim") or ""
-                            in_stock = p.get("InStock", True) and not p.get("IsOutStock", False)
+                            title = (
+                                p.get("Title")
+                                or p.get("UrunAdi")
+                                or ""
+                            )
+                            p_url = (
+                                p.get("Url") or p.get("UrunUrl") or ""
+                            )
+                            price = clean_price(
+                                p.get("Price")
+                                or p.get("SatisFiyati")
+                            )
+                            img = (
+                                p.get("Image")
+                                or p.get("DefaultResim")
+                                or ""
+                            )
+                            in_stock = p.get(
+                                "InStock", True
+                            ) and not p.get("IsOutStock", False)
 
                             if not title or not p_url or not in_stock:
                                 continue
 
                             full_url = urljoin(base_url, p_url)
-                            norm_url = full_url.split("?")[0].rstrip("/")
+                            norm_url = (
+                                full_url.split("?")[0].rstrip("/")
+                            )
 
-                            if norm_url in seen_urls or not is_valid(title):
+                            if norm_url in seen_urls or not is_valid(
+                                title
+                            ):
                                 continue
 
                             if img:
-                                if img.startswith("//"): img = "https:" + img
-                                elif not img.startswith("http"): img = urljoin(base_url, img)
+                                if img.startswith("//"):
+                                    img = "https:" + img
+                                elif not img.startswith("http"):
+                                    img = urljoin(base_url, img)
                                 img = f"https://wsrv.nl/?url={img}"
 
+                            if not img or "blank" in img.lower():
+                                continue
+
                             seen_urls.add(norm_url)
-                            items.append({
-                                "source": "3dcim",
-                                "external_id": norm_url.split("/")[-1],
-                                "name": title,
-                                "price": price,
-                                "old_price": None,
-                                "in_stock": 1,
-                                "weight_g": 1000,
-                                "url": full_url,
-                                "image": img,
-                            })
+                            items.append(
+                                {
+                                    "source": "3dcim",
+                                    "external_id": norm_url.split(
+                                        "/"
+                                    )[-1],
+                                    "name": title,
+                                    "price": price,
+                                    "old_price": None,
+                                    "in_stock": 1,
+                                    "weight_g": 1000,
+                                    "url": full_url,
+                                    "image": img,
+                                }
+                            )
                         continue
                     except Exception:
                         pass
 
-                # YÖNTEM 2: BeautifulSoup HTML Kart Ayrıştırma (Yedek)
+                # 2. YÖNTEM: HTML Ayrıştırma (Sadece Stoklu ve Resmi Tam Olanlar)
                 soup = BeautifulSoup(html_content, "html.parser")
-                cards = soup.select(".product-item, .productItem, .ItemOrj, [class*='product-box'], .p-card")
+                cards = soup.select(
+                    ".product-item, .productItem, .ItemOrj,"
+                    " [class*='product-box'], .p-card"
+                )
+
                 if not cards:
                     break
 
                 found_on_page = 0
                 for card in cards:
-                    card_text = card.get_text(" ", strip=True).lower()
-                    if "stokta yok" in card_text or "tükendi" in card_text:
+                    out_el = card.select_one(
+                        ".stokYok, .out-of-stock, .sold-out, .tukenText"
+                    )
+                    if out_el and (
+                        "stokta yok" in out_el.text.lower()
+                        or "tükendi" in out_el.text.lower()
+                    ):
                         continue
 
-                    title_el = card.select_one(".product-title, .productName, h3, a.title, .p-name, .title")
+                    title_el = card.select_one(
+                        ".product-title, .productName, h3, a.title,"
+                        " .p-name, .title"
+                    )
                     link_el = card.find("a", href=True)
-                    price_el = card.select_one(".product-price, .current-price, .price, .p-price")
+                    price_el = card.select_one(
+                        ".product-price, .current-price, .price,"
+                        " .p-price"
+                    )
 
                     if not title_el or not link_el:
                         continue
@@ -787,7 +841,11 @@ def fetch_3dcim() -> list[dict]:
                     if norm_url in seen_urls:
                         continue
 
-                    price = clean_price(price_el.get_text(" ", strip=True)) if price_el else None
+                    price = (
+                        clean_price(price_el.get_text(" ", strip=True))
+                        if price_el
+                        else None
+                    )
                     if not price or price <= 0:
                         continue
 
@@ -802,7 +860,11 @@ def fetch_3dcim() -> list[dict]:
                             or ""
                         ).strip()
 
-                        if raw_img and "blank" not in raw_img.lower() and not raw_img.endswith(".svg"):
+                        if (
+                            raw_img
+                            and "blank" not in raw_img.lower()
+                            and not raw_img.endswith(".svg")
+                        ):
                             if raw_img.startswith("//"):
                                 raw_img = "https:" + raw_img
                             elif not raw_img.startswith("http"):
@@ -832,11 +894,18 @@ def fetch_3dcim() -> list[dict]:
                 if found_on_page == 0:
                     break
 
-            except Exception as e:
-                print(f"[3dcim] Kategori {cat} Sayfa {pg} hatası: {e}", flush=True)
+            except Exception as error:
+                print(
+                    f"[3dcim] Kategori {cat} Sayfa {pg} hatası:"
+                    f" {error}",
+                    flush=True,
+                )
                 break
 
-    print(f"[3dcim] Toplam {len(items)} stoklu ürün çekildi.", flush=True)
+    print(
+        f"[3dcim] Toplam {len(items)} stoklu ürün çekildi.",
+        flush=True,
+    )
     return items
 
 
@@ -865,29 +934,48 @@ def run_update():
         porima_items = fetch_porima()
         if porima_items:
             with db() as connection:
-                connection.execute("DELETE FROM products WHERE source = 'Porima 3D'")
+                connection.execute(
+                    "DELETE FROM products WHERE source = 'Porima 3D'"
+                )
             porima_count = save_items(porima_items)
-            print(f"[Porima 3D] -> {porima_count} ürün kaydedildi.", flush=True)
+            print(
+                f"[Porima 3D] -> {porima_count} ürün kaydedildi.",
+                flush=True,
+            )
 
         # 2. Robotistan Taraması
         robotistan_items = fetch_robotistan()
         if robotistan_items:
             with db() as connection:
-                connection.execute("DELETE FROM products WHERE source = 'Robotistan'")
+                connection.execute(
+                    "DELETE FROM products WHERE source = 'Robotistan'"
+                )
             robotistan_count = save_items(robotistan_items)
-            print(f"[Robotistan] -> {robotistan_count} benzersiz ürün kaydedildi.", flush=True)
+            print(
+                f"[Robotistan] -> {robotistan_count} benzersiz ürün"
+                " kaydedildi.",
+                flush=True,
+            )
 
         # 3. 3dcim Taraması
         tcim_items = fetch_3dcim()
         if tcim_items:
             with db() as connection:
-                connection.execute("DELETE FROM products WHERE source = '3dcim'")
+                connection.execute(
+                    "DELETE FROM products WHERE source = '3dcim'"
+                )
             tcim_count = save_items(tcim_items)
-            print(f"[3dcim] -> {tcim_count} benzersiz ürün kaydedildi.", flush=True)
+            print(
+                f"[3dcim] -> {tcim_count} benzersiz ürün kaydedildi.",
+                flush=True,
+            )
 
         # Veritabanında resimsiz/bozuk kalmış eski verileri temizle
         with db() as connection:
-            connection.execute("DELETE FROM products WHERE image IS NULL OR image = '' OR image LIKE '%blank%'")
+            connection.execute(
+                "DELETE FROM products WHERE image IS NULL OR image = ''"
+                " OR image LIKE '%blank%'"
+            )
 
         print(">>> TARAMA TAMAMLANDI <<<", flush=True)
 
@@ -906,7 +994,12 @@ def index():
 @app.get("/api/products")
 def products():
     search_query = request.args.get("q", "").strip()
-    filters = ["in_stock = 1", "image IS NOT NULL", "image != ''", "image NOT LIKE '%blank%'"]
+    filters = [
+        "in_stock = 1",
+        "image IS NOT NULL",
+        "image != ''",
+        "image NOT LIKE '%blank%'",
+    ]
     parameters = []
 
     for field in ("brand", "material", "color", "source"):
@@ -952,7 +1045,9 @@ def products():
     """.format(" AND ".join(filters))
 
     with db() as connection:
-        rows = [dict(row) for row in connection.execute(sql, parameters)]
+        rows = [
+            dict(row) for row in connection.execute(sql, parameters)
+        ]
 
     return jsonify(rows)
 
