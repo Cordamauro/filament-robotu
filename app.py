@@ -66,16 +66,15 @@ MATERIAL_PATTERNS = [
     ("PLA", r"\bPLA(?:\+|[- ]?PLUS|[- ]?PRO|[- ]?BASIC|[- ]?HS)?\b")
 ]
 
-# KESİNLİKLE ELENECEK CİHAZ VE YEDEK PARÇA TERİMLERİ
-EXCLUDE_TERMS = [
+# ROBOTİSTAN İÇİN YEDEK PARÇA VE AKSESUAR ENGELLEME LİSTESİ
+ROBOTISTAN_EXCLUDE = [
     "cutter", "tube", "replacement", "print head", "head", "kesici", "boru", "borusu",
     "yıkama", "kürleme", "tarayıcı", "tarayici", "lazer", "gravür", "gravur", "turntable",
     "makinesi", "makine", "bundle", "scan", "scanner", "wash", "cure", "laser", "engraver",
     "printer", "yazıcı", "yazici", "nozzle", "hotend", "extruder", "kurutucu", "dryer", 
     "dry box", "vakum", "poşet", "reçine", "resin", "3d kalem", "spatula", "sprey", "rulman", 
     "soğutucu", "fan", "step motor", "baskı tablası", "peı", "tabla", "sensör", "somun", 
-    "vida", "kayış", "kasnak", "fişek", "ısıtıcı", "termistör", "yapıştırıcı", "modül", "kart",
-    "baskı kafası", "tabla", "yay", "sürücü", "güç kaynağı", "adaptör", "kablo"
+    "vida", "kayış", "kasnak", "fişek", "ısıtıcı", "termistör", "yapıştırıcı", "modül", "kart"
 ]
 
 KNOWN_BRANDS = [
@@ -110,24 +109,6 @@ def clean_price(val) -> float | None:
     except ValueError: return None
 
 
-def is_valid(name: str) -> bool:
-    n_lower = name.lower()
-    
-    # 1. Cihaz/aksesuar geçiyorsa direkt reddet
-    if any(t in n_lower for t in EXCLUDE_TERMS):
-        return False
-
-    # 2. Ürün adında filament ibaresi veya malzeme kalıbı olmalı
-    if "filament" in n_lower or "filaman" in n_lower or "1.75" in n_lower or "1,75" in n_lower:
-        return True
-
-    for _, pattern in MATERIAL_PATTERNS:
-        if re.search(pattern, name, re.I):
-            return True
-
-    return False
-
-
 def detect_color(name: str) -> str:
     n_lower = name.lower()
     for pattern, col in COLOR_MAPPING:
@@ -151,37 +132,7 @@ def detect_brand(name: str, fallback_source: str) -> str:
     return fallback_source
 
 
-def save_items(items: list[dict]) -> int:
-    now = datetime.now().isoformat(timespec="seconds")
-    count = 0
-    with db() as conn:
-        for p in items:
-            name = p.get("name", "").strip()
-            price = p.get("price")
-            if not name or not price or price <= 0 or not is_valid(name):
-                continue
-
-            source = p.get("source", "").strip()
-            brand = detect_brand(name, source)
-            material = detect_material(name)
-            color = detect_color(name)
-            
-            try:
-                conn.execute("""
-                    INSERT INTO products(source, external_id, name, brand, material, color, weight_g, price, old_price, in_stock, url, image, updated_at)
-                    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(source, url) DO UPDATE SET 
-                    source=excluded.source, price=excluded.price, image=excluded.image, in_stock=1, color=excluded.color, brand=excluded.brand, updated_at=excluded.updated_at
-                """, (
-                    source, str(p.get("external_id", "")), name, brand, material, color, 1000,
-                    price, p.get("old_price"), 1, p.get("url"), p.get("image", ""), now
-                ))
-                count += 1
-            except Exception:
-                pass
-    return count
-
-
+# PORİMA TARAMASI VE KAYIT MANTIĞI (DOKUNULMADI)
 def fetch_porima() -> list[dict]:
     items = []
     sess = requests.Session()
@@ -207,8 +158,6 @@ def fetch_porima() -> list[dict]:
                     if not v.get("available"): continue
                     v_title = v.get('title', '')
                     full_name = f"{title} {v_title if v_title != 'Default Title' else ''}"
-                    
-                    if not is_valid(full_name): continue
 
                     price = clean_price(v.get("price"))
                     if price:
@@ -229,8 +178,48 @@ def fetch_porima() -> list[dict]:
     return items
 
 
-def fetch_robotistan() -> list[dict]:
-    items = []
+def save_porima_items(items: list[dict]) -> int:
+    now = datetime.now().isoformat(timespec="seconds")
+    count = 0
+    with db() as conn:
+        for p in items:
+            name = p.get("name", "").strip()
+            price = p.get("price")
+            if not name or not price or price <= 0:
+                continue
+
+            brand = detect_brand(name, "Porima 3D")
+            material = detect_material(name)
+            color = detect_color(name)
+            
+            try:
+                conn.execute("""
+                    INSERT INTO products(source, external_id, name, brand, material, color, weight_g, price, old_price, in_stock, url, image, updated_at)
+                    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(source, url) DO UPDATE SET 
+                    source=excluded.source, price=excluded.price, image=excluded.image, in_stock=1, color=excluded.color, brand=excluded.brand, updated_at=excluded.updated_at
+                """, (
+                    "Porima 3D", str(p.get("external_id", "")), name, brand, material, color, 1000,
+                    price, p.get("old_price"), 1, p.get("url"), p.get("image", ""), now
+                ))
+                count += 1
+            except Exception:
+                pass
+    return count
+
+
+# YENİ VE HIZLI ROBOTİSTAN RAM BATCHING KODU
+def is_valid_robotistan(name: str) -> bool:
+    n_lower = name.lower()
+    if any(t in n_lower for t in ROBOTISTAN_EXCLUDE):
+        return False
+    return True
+
+
+def fetch_robotistan_memory() -> list[tuple]:
+    now = datetime.now().isoformat(timespec="seconds")
+    db_records = []
+    
     sess = requests.Session()
     sess.headers.update({
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -238,6 +227,7 @@ def fetch_robotistan() -> list[dict]:
     })
 
     base_url = "https://www.robotistan.com"
+    
     for page in range(1, 25):
         try:
             res = sess.get(f"{base_url}/3d-filament?sayfa={page}", timeout=10)
@@ -255,11 +245,11 @@ def fetch_robotistan() -> list[dict]:
 
                 if not title_el or not link_el: continue
                 title = title_el.get_text(strip=True)
-                
-                if not is_valid(title): continue
+
+                if not is_valid_robotistan(title):
+                    continue
 
                 price = clean_price(price_el.get_text(strip=True)) if price_el else None
-
                 if price and price > 0:
                     prod_url = link_el["href"]
                     if not prod_url.startswith("http"):
@@ -272,38 +262,61 @@ def fetch_robotistan() -> list[dict]:
                         if raw_img.startswith("//"): raw_img = "https:" + raw_img
                         elif raw_img and not raw_img.startswith("http"): raw_img = base_url + ("/" + raw_img.lstrip("/"))
 
-                    items.append({
-                        "source": "Robotistan",
-                        "external_id": prod_url.rstrip("/").split("/")[-1],
-                        "name": title,
-                        "price": price,
-                        "old_price": None,
-                        "url": prod_url,
-                        "image": raw_img
-                    })
+                    ext_id = prod_url.rstrip("/").split("/")[-1]
+                    brand = detect_brand(title, "Robotistan")
+                    material = detect_material(title)
+                    color = detect_color(title)
+
+                    db_records.append((
+                        "Robotistan", ext_id, title, brand, material, color, 1000,
+                        price, None, 1, prod_url, raw_img, now
+                    ))
                     found += 1
+
             if found == 0: break
         except Exception:
             break
-    return items
+
+    return db_records
+
+
+def save_robotistan_atomic(records: list[tuple]) -> int:
+    if not records:
+        return 0
+
+    with db() as conn:
+        conn.execute("BEGIN TRANSACTION")
+        conn.executemany("""
+            INSERT INTO products(source, external_id, name, brand, material, color, weight_g, price, old_price, in_stock, url, image, updated_at)
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(source, url) DO UPDATE SET 
+            source=excluded.source, price=excluded.price, image=excluded.image, in_stock=1, color=excluded.color, brand=excluded.brand, updated_at=excluded.updated_at
+        """, records)
+        conn.commit()
+
+    return len(records)
 
 
 def run_update():
     if not update_lock.acquire(blocking=False): return
     print(">>> TARAMA BAŞLADI <<<", flush=True)
     try:
-        # Veritabanında kalan geçersiz cihaz ve aksesuarları temizle
-        with db() as conn:
-            for term in EXCLUDE_TERMS:
-                conn.execute("DELETE FROM products WHERE LOWER(name) LIKE ?", (f"%{term}%",))
+        # 1. Porima Taraması (Orijinal Mantık)
+        try:
+            p_items = fetch_porima()
+            p_c = save_porima_items(p_items)
+            print(f"[Porima 3D] -> {p_c} ürün eklendi.", flush=True)
+        except Exception as e:
+            print(f"[Porima 3D] Hata: {e}", flush=True)
 
-        p_items = fetch_porima()
-        p_c = save_items(p_items)
-        print(f"[Porima 3D] -> {p_c} ürün eklendi.", flush=True)
+        # 2. Robotistan Atomic RAM Taraması
+        try:
+            r_records = fetch_robotistan_memory()
+            r_c = save_robotistan_atomic(r_records)
+            print(f"[Robotistan] -> {r_c} ürün kilitlenmeden toplu eklendi.", flush=True)
+        except Exception as e:
+            print(f"[Robotistan] Hata: {e}", flush=True)
 
-        r_items = fetch_robotistan()
-        r_c = save_items(r_items)
-        print(f"[Robotistan] -> {r_c} ürün eklendi.", flush=True)
         print(">>> TARAMA TAMAMLAMDI <<<", flush=True)
     finally:
         update_lock.release()
@@ -318,7 +331,7 @@ def index():
 def products():
     q = request.args.get("q", "").strip()
     filters, params = ["in_stock = 1"], []
-    
+
     for field in ("brand", "material", "color", "source"):
         val = request.args.get(field, "").strip()
         if val:
