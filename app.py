@@ -159,6 +159,9 @@ KNOWN_BRANDS = [
     "Fibromast",
     "Robotistan",
     "tinylab",
+    "Inslogic",
+    "Kingroon",
+    "Apex",
     "3dcim",
 ]
 
@@ -669,11 +672,16 @@ def fetch_3dcim() -> list[dict]:
         }
     )
 
-    base_url = "https://www.3dcim.com"
+    base_url = "https://3dcim.com"
 
-    for page_number in range(1, 25):
+    for page_number in range(1, 50):
         try:
-            page_url = f"{base_url}/filament?sayfa={page_number}"
+            # 3dcim gerçek filament kategori adresi: /3d-yazici-filament-cesitleri
+            if page_number == 1:
+                page_url = f"{base_url}/3d-yazici-filament-cesitleri"
+            else:
+                page_url = f"{base_url}/3d-yazici-filament-cesitleri?pg={page_number}"
+
             response = session.get(page_url, timeout=20)
 
             if response.status_code != 200:
@@ -681,7 +689,7 @@ def fetch_3dcim() -> list[dict]:
 
             soup = BeautifulSoup(response.text, "html.parser")
             cards = soup.select(
-                ".product-item, .productItem, .product-box, [class*='product']"
+                ".product-item, .productItem, .product-box, [class*='product'], .p-card"
             )
 
             if not cards:
@@ -691,7 +699,7 @@ def fetch_3dcim() -> list[dict]:
 
             for card in cards:
                 title_element = card.select_one(
-                    ".product-title, .productName, h3, a.title, .p-name"
+                    ".product-title, .productName, h3, a.title, .p-name, .title"
                 )
                 if not title_element:
                     continue
@@ -700,7 +708,11 @@ def fetch_3dcim() -> list[dict]:
                 if not title or not is_valid(title):
                     continue
 
-                link_element = card.find("a", href=True)
+                if title_element.name == "a" and title_element.get("href"):
+                    link_element = title_element
+                else:
+                    link_element = card.find("a", href=True)
+
                 if not link_element:
                     continue
 
@@ -715,7 +727,7 @@ def fetch_3dcim() -> list[dict]:
                     continue
 
                 price_element = card.select_one(
-                    ".product-price, .current-price, .price, .p-price"
+                    ".product-price, .current-price, .price, .p-price, [class*='price']"
                 )
                 price = None
                 if price_element:
