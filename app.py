@@ -593,9 +593,14 @@ def fetch_robotistan() -> list[dict]:
 
                     if raw_image:
                         if raw_image.startswith("//"):
-                            image_url = "https:" + raw_image
+                            full_img_url = "https:" + raw_image
+                        elif raw_image.startswith("http"):
+                            full_img_url = raw_image
                         else:
-                            image_url = urljoin(base_url, raw_image)
+                            full_img_url = urljoin(base_url, raw_image)
+
+                        # Robotistan hotlink engelini aşmak için proxy kullanımı
+                        image_url = f"https://wsrv.nl/?url={full_img_url}"
 
                 seen_urls.add(normalized_url)
 
