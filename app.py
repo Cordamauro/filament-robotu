@@ -166,6 +166,7 @@ KNOWN_BRANDS = [
     "Inslogic",
     "Kingroon",
     "Apex",
+    "Filament Marketim",
 ]
 
 
@@ -674,6 +675,113 @@ def fetch_robotistan() -> list[dict]:
     return items
 
 
+# FİLAMENT MARKETİM ENTEGRASYONU
+def fetch_filamentmarketim() -> list[dict]:
+    items = []
+    seen_urls = set()
+    session = requests.Session()
+
+    session.headers.update(
+        {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/128.0.0.0 Safari/537.36"
+            ),
+            "Accept": "application/json",
+        }
+    )
+
+    base_url = "https://www.filamentmarketim.com"
+
+    for page_number in range(1, 20):
+        url = f"{base_url}/products.json?page={page_number}&limit=250"
+
+        try:
+            response = session.get(url, timeout=20)
+
+            if response.status_code != 200:
+                break
+
+            products = response.json().get("products", [])
+
+            if not products:
+                break
+
+            for product in products:
+                title = product.get("title", "").strip()
+                images = product.get("images") or []
+                default_image = images[0].get("src") if images else ""
+
+                for variant in product.get("variants", []):
+                    if not variant.get("available"):
+                        continue
+
+                    variant_title = variant.get("title", "").strip()
+
+                    full_name = title
+
+                    if (
+                        variant_title
+                        and variant_title.casefold() != "default title"
+                    ):
+                        full_name = f"{title} {variant_title}"
+
+                    if not is_valid(full_name):
+                        continue
+
+                    price = clean_price(variant.get("price"))
+
+                    if price is None or price <= 0:
+                        continue
+
+                    featured_image = variant.get("featured_image") or {}
+                    variant_image = (
+                        featured_image.get("src") or default_image
+                    )
+
+                    if variant_image and variant_image.startswith("//"):
+                        variant_image = "https:" + variant_image
+
+                    if variant_image:
+                        variant_image = f"https://wsrv.nl/?url={variant_image}"
+
+                    product_url = (
+                        f"{base_url}/products/"
+                        f"{product.get('handle')}"
+                        f"?variant={variant.get('id')}"
+                    )
+
+                    items.append(
+                        {
+                            "source": "Filament Marketim",
+                            "external_id": str(variant.get("id", "")),
+                            "name": full_name,
+                            "price": price,
+                            "old_price": clean_price(
+                                variant.get("compare_at_price")
+                            ),
+                            "in_stock": 1,
+                            "weight_g": 1000,
+                            "url": product_url,
+                            "image": variant_image,
+                        }
+                    )
+
+        except Exception as error:
+            print(
+                f"[Filament Marketim] Sayfa {page_number} hatası: {error}",
+                flush=True,
+            )
+            break
+
+    print(
+        f"[Filament Marketim] Toplam {len(items)} stoklu filament bulundu.",
+        flush=True,
+    )
+    return items
+
+
 def run_update():
     if not update_lock.acquire(blocking=False):
         print(
@@ -711,6 +819,14 @@ def run_update():
                 connection.execute("DELETE FROM products WHERE source = 'Robotistan'")
             robotistan_count = save_items(robotistan_items)
             print(f"[Robotistan] -> {robotistan_count} benzersiz ürün kaydedildi.", flush=True)
+
+        # 3. Filament Marketim Taraması
+        fm_items = fetch_filamentmarketim()
+        if fm_items:
+            with db() as connection:
+                connection.execute("DELETE FROM products WHERE source = 'Filament Marketim'")
+            fm_count = save_items(fm_items)
+            print(f"[Filament Marketim] -> {fm_count} benzersiz ürün kaydedildi.", flush=True)
 
         with db() as connection:
             connection.execute(
@@ -751,6 +867,8 @@ def products():
             filters.append("LOWER(source) LIKE '%porima%'")
         elif field == "source" and "robotistan" in value.casefold():
             filters.append("LOWER(source) LIKE '%robotistan%'")
+        elif field == "source" and "filament" in value.casefold():
+            filters.append("LOWER(source) LIKE '%filament marketim%'")
         else:
             filters.append(f"{field} = ?")
             parameters.append(value)
