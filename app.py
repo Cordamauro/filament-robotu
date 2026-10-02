@@ -66,9 +66,8 @@ MATERIAL_PATTERNS = [
     ("PLA", r"\bPLA(?:\+|[- ]?PLUS|[- ]?PRO|[- ]?BASIC|[- ]?HS)?\b")
 ]
 
-# Kesici, Boru, Tüp, Bıçak vb. kesin olarak engellenen kelimeler
 EXCLUDE_TERMS = [
-    "cutter", "tube", "replacement", "print head", "head", "kesici", "boru", "borusu",
+    "cutter", "tube", "replacement", "print head", "kesici", "boru", "borusu",
     "yıkama", "kürleme", "tarayıcı", "tarayici", "lazer", "gravür", "gravur", "turntable",
     "makinesi", "makine", "bundle", "scan", "scanner", "wash", "cure", "laser", "engraver",
     "printer", "yazıcı", "yazici", "nozzle", "hotend", "extruder", "kurutucu", "dryer", 
@@ -78,7 +77,7 @@ EXCLUDE_TERMS = [
 ]
 
 KNOWN_BRANDS = [
-    "Microzey", "Porima", "Filamix", "Beta Filament", "R3D", "Creality", "Anycubic", 
+    "Microzey", "Porima 3D", "Porima", "Filamix", "Beta Filament", "R3D", "Creality", "Anycubic", 
     "Sunlu", "eSUN", "Polymaker", "Elegoo", "Spectrum", "Formfutura", "Bambu Lab", "Fibromast", "Robotistan"
 ]
 
@@ -111,20 +110,9 @@ def clean_price(val) -> float | None:
 
 def is_valid(name: str) -> bool:
     n_lower = name.lower()
-    
-    # 1. Kesici, Tüp, Aksesuar terimlerini doğrudan engelle
     if any(t in n_lower for t in EXCLUDE_TERMS):
         return False
-        
-    # 2. Ürün adında makara/kilo veya malzeme türü var mı?
-    if "filament" in n_lower or "filaman" in n_lower or "1.75" in n_lower or "1,75" in n_lower:
-        return True
-        
-    for _, pattern in MATERIAL_PATTERNS:
-        if re.search(pattern, name, re.I):
-            return True
-            
-    return False
+    return True
 
 
 def detect_color(name: str) -> str:
@@ -143,11 +131,11 @@ def detect_material(name: str) -> str:
     return "PLA"
 
 
-def detect_brand(name: str, fallback: str) -> str:
+def detect_brand(name: str, fallback_source: str) -> str:
     for b in KNOWN_BRANDS:
         if b.lower() in name.lower():
             return b
-    return fallback
+    return fallback_source
 
 
 def save_items(items: list[dict]) -> int:
@@ -160,7 +148,9 @@ def save_items(items: list[dict]) -> int:
             if not name or not price or price <= 0 or not is_valid(name):
                 continue
 
-            brand = detect_brand(name, p.get("source", ""))
+            # Kaynak (Mağaza Adı) kesinlikle kaynak olarak yazılmalı!
+            source = p.get("source", "").strip()
+            brand = detect_brand(name, source)
             material = detect_material(name)
             color = detect_color(name)
             
@@ -169,9 +159,9 @@ def save_items(items: list[dict]) -> int:
                     INSERT INTO products(source, external_id, name, brand, material, color, weight_g, price, old_price, in_stock, url, image, updated_at)
                     VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(source, url) DO UPDATE SET 
-                    price=excluded.price, image=excluded.image, in_stock=excluded.in_stock, color=excluded.color, brand=excluded.brand, updated_at=excluded.updated_at
+                    source=excluded.source, price=excluded.price, image=excluded.image, in_stock=1, color=excluded.color, brand=excluded.brand, updated_at=excluded.updated_at
                 """, (
-                    p.get("source"), str(p.get("external_id", "")), name, brand, material, color, 1000,
+                    source, str(p.get("external_id", "")), name, brand, material, color, 1000,
                     price, p.get("old_price"), 1, p.get("url"), p.get("image", ""), now
                 ))
                 count += 1
@@ -188,7 +178,7 @@ def fetch_porima() -> list[dict]:
         'Accept': 'application/json'
     })
 
-    for p_num in range(1, 8):
+    for p_num in range(1, 10):
         url = f"https://porima3d.com/products.json?page={p_num}&limit=250"
         try:
             res = sess.get(url, timeout=10)
@@ -206,8 +196,7 @@ def fetch_porima() -> list[dict]:
                     v_title = v.get('title', '')
                     full_name = f"{title} {v_title if v_title != 'Default Title' else ''}"
                     
-                    if not is_valid(full_name):
-                        continue
+                    if not is_valid(full_name): continue
 
                     price = clean_price(v.get("price"))
                     if price:
@@ -237,7 +226,7 @@ def fetch_robotistan() -> list[dict]:
     })
 
     base_url = "https://www.robotistan.com"
-    for page in range(1, 20):
+    for page in range(1, 25):
         try:
             res = sess.get(f"{base_url}/3d-filament?sayfa={page}", timeout=10)
             if res.status_code != 200: break
@@ -255,8 +244,7 @@ def fetch_robotistan() -> list[dict]:
                 if not title_el or not link_el: continue
                 title = title_el.get_text(strip=True)
                 
-                if not is_valid(title):
-                    continue
+                if not is_valid(title): continue
 
                 price = clean_price(price_el.get_text(strip=True)) if price_el else None
 
@@ -294,11 +282,6 @@ def run_update():
     if not update_lock.acquire(blocking=False): return
     print(">>> TARAMA BAŞLADI <<<", flush=True)
     try:
-        # Hatalı yedek parçaları veritabanından temizle
-        with db() as conn:
-            for term in EXCLUDE_TERMS:
-                conn.execute("DELETE FROM products WHERE LOWER(name) LIKE ?", (f"%{term}%",))
-        
         p_items = fetch_porima()
         p_c = save_items(p_items)
         print(f"[Porima 3D] -> {p_c} ürün eklendi.", flush=True)
@@ -321,11 +304,18 @@ def products():
     q = request.args.get("q", "").strip()
     filters, params = ["in_stock = 1"], []
     
+    # Mağaza (source) veya Marka (brand) filtreleri
     for field in ("brand", "material", "color", "source"):
         val = request.args.get(field, "").strip()
         if val:
-            filters.append(f"{field} = ?")
-            params.append(val)
+            # Porima 3D / Porima esnek eşleşmesi
+            if field == "source" and "porima" in val.lower():
+                filters.append("LOWER(source) LIKE '%porima%'")
+            elif field == "source" and "robotistan" in val.lower():
+                filters.append("LOWER(source) LIKE '%robotistan%'")
+            else:
+                filters.append(f"{field} = ?")
+                params.append(val)
 
     if q:
         filters.append("(name LIKE ? OR brand LIKE ? OR material LIKE ?)")
