@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import json
 import os
 import re
 import sqlite3
 import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urljoin
@@ -677,150 +675,18 @@ def fetch_robotistan() -> list[dict]:
     return items
 
 
-# FİLAMENT MARKETİM - YÜKSEK HIZLI PARALEL DETAY VE VARYANT YAKALAYICI
-def process_single_product(product_url: str, session: requests.Session, base_url: str) -> list[dict]:
-    p_items = []
-    try:
-        res = session.get(product_url, timeout=6)
-        if res.status_code != 200:
-            return p_items
-
-        html_text = res.text
-        soup = BeautifulSoup(html_text, "html.parser")
-
-        title_el = soup.select_one("h1, .product-name, .productTitle")
-        price_el = soup.select_one(".product-price, .price, .current-price, .p-price")
-
-        if not title_el or not price_el:
-            return p_items
-
-        main_title = title_el.get_text(" ", strip=True)
-        main_price = clean_price(price_el.get_text(" ", strip=True))
-
-        if not main_price or main_price <= 0:
-            return p_items
-
-        img_el = soup.select_one(".product-image img, #imgUrunResmi, img[data-src], img.lazyload")
-        main_img = ""
-        if img_el:
-            raw_img = (
-                img_el.get("data-src")
-                or img_el.get("data-original")
-                or img_el.get("src")
-                or ""
-            ).strip()
-
-            if raw_img and "blank" not in raw_img.lower():
-                if raw_img.startswith("//"): raw_img = "https:" + raw_img
-                elif not raw_img.startswith("http"): raw_img = urljoin(base_url, raw_img)
-                main_img = f"https://wsrv.nl/?url={raw_img}"
-
-        # 1. JS `subProducts` Taraması
-        js_variants = re.findall(r'var\040subProducts\s*=\s*(\{.*?\});', html_text, re.DOTALL) or \
-                     re.findall(r'var\040variantData\s*=\s*(\{.*?\});', html_text, re.DOTALL)
-
-        sub_count = 0
-
-        if js_variants:
-            try:
-                v_dict = json.loads(js_variants[0])
-                for v_id, v_data in v_dict.items():
-                    v_name = v_data.get("name") or v_data.get("type") or v_data.get("variant_name") or ""
-                    v_stock = v_data.get("stock", 1) > 0 and not v_data.get("is_out_of_stock", False)
-                    v_price = clean_price(v_data.get("price")) or main_price
-                    v_img = v_data.get("image") or main_img
-
-                    if not v_stock or not v_name:
-                        continue
-
-                    full_title = f"{main_title} {v_name}" if v_name.casefold() not in main_title.casefold() else main_title
-                    variant_url = f"{product_url}?subProduct={v_id}"
-
-                    if not is_valid(full_title):
-                        continue
-
-                    if v_img and not v_img.startswith("http"):
-                        v_img = urljoin(base_url, v_img)
-                        v_img = f"https://wsrv.nl/?url={v_img}"
-
-                    p_items.append({
-                        "source": "Filament Marketim",
-                        "external_id": str(v_id),
-                        "name": full_title,
-                        "price": v_price,
-                        "old_price": None,
-                        "in_stock": 1,
-                        "weight_g": 1000,
-                        "url": variant_url,
-                        "image": v_img or main_img,
-                    })
-                    sub_count += 1
-            except Exception:
-                pass
-
-        # 2. Select Option Taraması
-        if sub_count == 0:
-            options = soup.select("select[name*='variant'] option, select#subProduct option, .variant-box option")
-            for opt in options:
-                opt_val = opt.get("value", "").strip()
-                opt_text = opt.get_text(" ", strip=True)
-
-                if not opt_val or "seçiniz" in opt_text.lower() or opt_val == "0":
-                    continue
-
-                if "tükendi" in opt_text.lower() or "yok" in opt_text.lower():
-                    continue
-
-                clean_color = re.sub(r'\s*\([^)]*\)', '', opt_text).strip()
-                full_title = f"{main_title} {clean_color}" if clean_color.casefold() not in main_title.casefold() else main_title
-
-                variant_url = f"{product_url}?subProduct={opt_val}"
-
-                if not is_valid(full_title):
-                    continue
-
-                p_items.append({
-                    "source": "Filament Marketim",
-                    "external_id": opt_val,
-                    "name": full_title,
-                    "price": main_price,
-                    "old_price": None,
-                    "in_stock": 1,
-                    "weight_g": 1000,
-                    "url": variant_url,
-                    "image": main_img,
-                })
-                sub_count += 1
-
-        # 3. Tekil Ürün
-        if sub_count == 0 and is_valid(main_title) and main_img:
-            p_items.append({
-                "source": "Filament Marketim",
-                "external_id": product_url.split("/")[-1],
-                "name": main_title,
-                "price": main_price,
-                "old_price": None,
-                "in_stock": 1,
-                "weight_g": 1000,
-                "url": product_url,
-                "image": main_img,
-            })
-
-    except Exception:
-        pass
-
-    return p_items
-
-
+# FİLAMENT MARKETİM - HIZLI SENKRON KATEGORİ SÜZÜCÜ (Sıfır Kilitlenme Garantisi)
 def fetch_filamentmarketim() -> list[dict]:
     items = []
     seen_urls = set()
     session = requests.Session()
 
-    session.headers.update({
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    })
+    session.headers.update(
+        {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        }
+    )
 
     base_url = "https://www.filamentmarketim.com"
     target_categories = [
@@ -830,13 +696,11 @@ def fetch_filamentmarketim() -> list[dict]:
         "/tpu-flex-filament",
     ]
 
-    product_links = set()
-
     for cat in target_categories:
-        for page_number in range(1, 6):
+        for page_number in range(1, 10):
             try:
                 page_url = f"{base_url}{cat}?tp={page_number}" if page_number > 1 else f"{base_url}{cat}"
-                res = session.get(page_url, timeout=10)
+                res = session.get(page_url, timeout=5)
                 if res.status_code != 200:
                     break
 
@@ -849,38 +713,109 @@ def fetch_filamentmarketim() -> list[dict]:
                 if not cards:
                     break
 
-                for card in cards:
-                    link_el = card.find("a", href=True)
-                    if link_el and link_el.get("href"):
-                        href = link_el["href"].strip()
-                        if href and not href.startswith("javascript"):
-                            full_href = urljoin(base_url, href)
-                            product_links.add(full_href)
+                new_on_page = 0
 
-            except Exception:
+                for card in cards:
+                    card_text = card.get_text(" ", strip=True).lower()
+                    if "tükendi" in card_text or "stokta yok" in card_text:
+                        continue
+
+                    title_el = card.select_one(".product-title, .productName, h3, a.title, .title, .p-name")
+                    price_el = card.select_one(".product-price, .price, .current-price, .p-price")
+                    link_el = card.find("a", href=True)
+
+                    if not title_el or not price_el or not link_el:
+                        continue
+
+                    title = title_el.get_text(" ", strip=True)
+                    price = clean_price(price_el.get_text(" ", strip=True))
+
+                    if not title or not price or price <= 0 or not is_valid(title):
+                        continue
+
+                    raw_href = link_el["href"].strip()
+                    product_url = urljoin(base_url, raw_href)
+
+                    # Görsel Alma
+                    img_el = card.find("img")
+                    base_img = ""
+                    if img_el:
+                        raw_img = (
+                            img_el.get("data-original")
+                            or img_el.get("data-src")
+                            or img_el.get("src")
+                            or ""
+                        ).strip()
+
+                        if raw_img and "blank" not in raw_img.lower():
+                            if raw_img.startswith("//"): raw_img = "https:" + raw_img
+                            elif not raw_img.startswith("http"): raw_img = urljoin(base_url, raw_img)
+                            base_img = f"https://wsrv.nl/?url={raw_img}"
+
+                    if not base_img:
+                        continue
+
+                    # KART İÇİ RENK VARYANTLARI KONTROLÜ
+                    sub_variants = card.select(".sub-product-item, .variant-box option, [data-subproduct-id], .variant-list a")
+                    found_sub = 0
+
+                    if sub_variants:
+                        for v in sub_variants:
+                            v_text = v.get_text(" ", strip=True)
+                            v_id = v.get("value") or v.get("data-subproduct-id") or v.get("data-id") or ""
+                            
+                            if not v_text or "seçiniz" in v_text.lower() or "tükendi" in v_text.lower():
+                                continue
+
+                            clean_v_text = re.sub(r'\s*\([^)]*\)', '', v_text).strip()
+                            full_name = f"{title} {clean_v_text}" if clean_v_text.casefold() not in title.casefold() else title
+                            
+                            var_url = f"{product_url}?subProduct={v_id}" if v_id else product_url
+                            norm_url = var_url.split("?")[0] + (f"?subProduct={v_id}" if v_id else "")
+
+                            if norm_url in seen_urls or not is_valid(full_name):
+                                continue
+
+                            seen_urls.add(norm_url)
+                            items.append({
+                                "source": "Filament Marketim",
+                                "external_id": v_id or norm_url.split("/")[-1],
+                                "name": full_name,
+                                "price": price,
+                                "old_price": None,
+                                "in_stock": 1,
+                                "weight_g": 1000,
+                                "url": var_url,
+                                "image": base_img,
+                            })
+                            found_sub += 1
+                            new_on_page += 1
+
+                    if found_sub == 0:
+                        norm_url = product_url.split("?")[0].rstrip("/")
+                        if norm_url not in seen_urls:
+                            seen_urls.add(norm_url)
+                            items.append({
+                                "source": "Filament Marketim",
+                                "external_id": norm_url.split("/")[-1],
+                                "name": title,
+                                "price": price,
+                                "old_price": None,
+                                "in_stock": 1,
+                                "weight_g": 1000,
+                                "url": product_url,
+                                "image": base_img,
+                            })
+                            new_on_page += 1
+
+                if new_on_page == 0:
+                    break
+
+            except Exception as e:
+                print(f"[Filament Marketim] {cat} Hatası: {e}", flush=True)
                 break
 
-    print(f"[Filament Marketim] {len(product_links)} ürün paralel olarak saniyeler içinde taranıyor...", flush=True)
-
-    # PARALEL TARAMA ENGINE (10 EŞZAMANLI WORKER)
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = [
-            executor.submit(process_single_product, url, session, base_url)
-            for url in list(product_links)[:60]
-        ]
-
-        for future in as_completed(futures):
-            try:
-                p_list = future.result()
-                for prod in p_list:
-                    norm_u = prod["url"].split("?")[0] + ("?" + prod["url"].split("?")[1] if "?" in prod["url"] else "")
-                    if norm_u not in seen_urls:
-                        seen_urls.add(norm_u)
-                        items.append(prod)
-            except Exception:
-                pass
-
-    print(f"[Filament Marketim] Toplam {len(items)} adet bağımsız renk/varyant filamenti başarıyla kaydedildi.", flush=True)
+    print(f"[Filament Marketim] Toplam {len(items)} adet stoklu filament başarıyla çekildi.", flush=True)
     return items
 
 
