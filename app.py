@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 import re
 import sqlite3
@@ -676,153 +675,81 @@ def fetch_robotistan() -> list[dict]:
     return items
 
 
-# FİLAMENT MARKETİM - CLOUDFLARE VE İDEASOFT VARYANT KAZIMA ENGINE
+# FİLAMENT MARKETİM - İDEASOFT DAHİLİ AUTOCOMPLETE API SİSTEMİ
 def fetch_filamentmarketim() -> list[dict]:
     items = []
     seen_urls = set()
     base_url = "https://www.filamentmarketim.com"
 
     session = requests.Session()
-    # Cloudflare WAF engelini aşmak için arama motoru bot başlığı
+    # İdeasoft Ajax İstemci Başlıkları
     session.headers.update({
-        "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "X-Requested-With": "XMLHttpRequest",
     })
 
-    # Filament Marketim'in İdeasoft üzerindeki tüm aktif ürün kategorileri
-    categories = [
-        "/pla-filament",
-        "/petg-filament",
-        "/abs-filament",
-        "/tpu-flex-filament",
-        "/3d-yazici-filamentleri",
-    ]
+    # Arama motoruna yönlendirilecek filament anahtar kelimeleri
+    keywords = ["sunlu", "porima", "microzey", "esun", "pla", "petg", "abs", "tpu", "filament"]
 
-    for cat in categories:
-        for page_number in range(1, 15):
-            try:
-                page_url = f"{base_url}{cat}?tp={page_number}" if page_number > 1 else f"{base_url}{cat}"
-                res = session.get(page_url, timeout=12)
+    for q in keywords:
+        try:
+            # İdeasoft Canlı Arama Servisi
+            api_url = f"{base_url}/srv/service/product/search?q={q}"
+            resp = session.get(api_url, timeout=10)
 
-                if res.status_code != 200:
-                    break
+            if resp.status_code == 200:
+                try:
+                    data = resp.json()
+                    products = data if isinstance(data, list) else data.get("products", []) or data.get("data", [])
 
-                soup = BeautifulSoup(res.text, "html.parser")
-                
-                # Kart ve varyant seçicileri
-                cards = soup.select(
-                    ".product-item, .productItem, .showProductScheme, "
-                    "[class*='product-box'], .p-card, .product-detail-card, .ItemOrj"
-                )
+                    for p in products:
+                        title = p.get("title") or p.get("name") or p.get("label") or ""
+                        p_url = p.get("url") or p.get("link") or p.get("path") or ""
+                        raw_price = p.get("price") or p.get("price_selling") or p.get("price_discounted")
+                        img = p.get("image") or p.get("img") or p.get("src") or ""
 
-                if not cards:
-                    break
+                        if not title or not p_url or not is_valid(title):
+                            continue
 
-                new_found = 0
+                        price = clean_price(raw_price)
+                        if not price or price <= 0:
+                            continue
 
-                for card in cards:
-                    card_str = card.get_text(" ", strip=True).lower()
-                    if "tükendi" in card_str or "stokta yok" in card_str:
-                        continue
+                        full_url = urljoin(base_url, p_url)
+                        norm_url = full_url.strip()
 
-                    title_el = card.select_one(".product-title, .productName, h3, a.title, .title, .p-name")
-                    price_el = card.select_one(".product-price, .price, .current-price, .p-price")
-                    link_el = card.find("a", href=True)
+                        if norm_url in seen_urls:
+                            continue
 
-                    if not title_el or not price_el or not link_el:
-                        continue
+                        if img:
+                            if img.startswith("//"):
+                                img = "https:" + img
+                            elif not img.startswith("http"):
+                                img = urljoin(base_url, img)
+                            img = f"https://wsrv.nl/?url={img}"
 
-                    title = title_el.get_text(" ", strip=True)
-                    price = clean_price(price_el.get_text(" ", strip=True))
+                        if not img or "blank" in img.lower():
+                            continue
 
-                    if not title or not price or price <= 0 or not is_valid(title):
-                        continue
+                        seen_urls.add(norm_url)
+                        items.append({
+                            "source": "Filament Marketim",
+                            "external_id": norm_url.split("/")[-1],
+                            "name": title,
+                            "price": price,
+                            "old_price": None,
+                            "in_stock": 1,
+                            "weight_g": 1000,
+                            "url": full_url,
+                            "image": img,
+                        })
+                except Exception:
+                    continue
+        except Exception:
+            continue
 
-                    raw_href = link_el["href"].strip()
-                    product_url = urljoin(base_url, raw_href)
-
-                    # Görseli Bul
-                    img_el = card.find("img")
-                    base_img = ""
-                    if img_el:
-                        raw_img = (
-                            img_el.get("data-original")
-                            or img_el.get("data-src")
-                            or img_el.get("src")
-                            or ""
-                        ).strip()
-
-                        if raw_img and "blank" not in raw_img.lower():
-                            if raw_img.startswith("//"): raw_img = "https:" + raw_img
-                            elif not raw_img.startswith("http"): raw_img = urljoin(base_url, raw_img)
-                            base_img = f"https://wsrv.nl/?url={raw_img}"
-
-                    if not base_img:
-                        continue
-
-                    # KART İÇİ RENK SEÇENEKLERİ (Sunlu PLA Siyah, Beyaz vb. renk seçicileri)
-                    sub_opts = card.select(".sub-product-item, .variant-box option, [data-subproduct-id], .variant-list a, select option")
-                    var_count = 0
-
-                    if sub_opts:
-                        for opt in sub_opts:
-                            opt_text = opt.get_text(" ", strip=True)
-                            opt_id = opt.get("value") or opt.get("data-subproduct-id") or opt.get("data-id") or ""
-
-                            if not opt_text or "seçiniz" in opt_text.lower() or "tükendi" in opt_text.lower() or opt_id == "0":
-                                continue
-
-                            clean_color = re.sub(r'\s*\([^)]*\)', '', opt_text).strip()
-                            full_name = f"{title} {clean_color}" if clean_color.casefold() not in title.casefold() else title
-
-                            v_url = f"{product_url}?subProduct={opt_id}" if opt_id else product_url
-                            norm_url = v_url.split("?")[0] + (f"?subProduct={opt_id}" if opt_id else "")
-
-                            if norm_url in seen_urls or not is_valid(full_name):
-                                continue
-
-                            seen_urls.add(norm_url)
-                            items.append({
-                                "source": "Filament Marketim",
-                                "external_id": opt_id or norm_url.split("/")[-1],
-                                "name": full_name,
-                                "price": price,
-                                "old_price": None,
-                                "in_stock": 1,
-                                "weight_g": 1000,
-                                "url": v_url,
-                                "image": base_img,
-                            })
-                            var_count += 1
-                            new_found += 1
-
-                    # Kart içinde seçenek tanımlı değilse doğrudan ana ürünü ekle
-                    if var_count == 0:
-                        norm_url = product_url.split("?")[0].rstrip("/")
-                        if norm_url not in seen_urls:
-                            seen_urls.add(norm_url)
-                            items.append({
-                                "source": "Filament Marketim",
-                                "external_id": norm_url.split("/")[-1],
-                                "name": title,
-                                "price": price,
-                                "old_price": None,
-                                "in_stock": 1,
-                                "weight_g": 1000,
-                                "url": product_url,
-                                "image": base_img,
-                            })
-                            new_found += 1
-
-                if new_found == 0:
-                    break
-
-            except Exception as e:
-                print(f"[Filament Marketim Log] {cat} Hatası: {e}", flush=True)
-                break
-
-    print(f"[Filament Marketim] Toplam {len(items)} adet renk/varyant filamenti çekildi.", flush=True)
+    print(f"[Filament Marketim] Dahili API üzerinden {len(items)} adet renk/varyant filamenti çekildi.", flush=True)
     return items
 
 
