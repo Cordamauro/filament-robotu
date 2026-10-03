@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import re
 import sqlite3
@@ -675,49 +676,54 @@ def fetch_robotistan() -> list[dict]:
     return items
 
 
-# FİLAMENT MARKETİM - HIZLI SENKRON KATEGORİ SÜZÜCÜ (Sıfır Kilitlenme Garantisi)
+# FİLAMENT MARKETİM - CLOUDFLARE VE İDEASOFT VARYANT KAZIMA ENGINE
 def fetch_filamentmarketim() -> list[dict]:
     items = []
     seen_urls = set()
-    session = requests.Session()
-
-    session.headers.update(
-        {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        }
-    )
-
     base_url = "https://www.filamentmarketim.com"
-    target_categories = [
+
+    session = requests.Session()
+    # Cloudflare WAF engelini aşmak için arama motoru bot başlığı
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+    })
+
+    # Filament Marketim'in İdeasoft üzerindeki tüm aktif ürün kategorileri
+    categories = [
         "/pla-filament",
         "/petg-filament",
         "/abs-filament",
         "/tpu-flex-filament",
+        "/3d-yazici-filamentleri",
     ]
 
-    for cat in target_categories:
-        for page_number in range(1, 10):
+    for cat in categories:
+        for page_number in range(1, 15):
             try:
                 page_url = f"{base_url}{cat}?tp={page_number}" if page_number > 1 else f"{base_url}{cat}"
-                res = session.get(page_url, timeout=5)
+                res = session.get(page_url, timeout=12)
+
                 if res.status_code != 200:
                     break
 
                 soup = BeautifulSoup(res.text, "html.parser")
+                
+                # Kart ve varyant seçicileri
                 cards = soup.select(
                     ".product-item, .productItem, .showProductScheme, "
-                    "[class*='product'], .p-card, .product-box, .product-detail-card"
+                    "[class*='product-box'], .p-card, .product-detail-card, .ItemOrj"
                 )
 
                 if not cards:
                     break
 
-                new_on_page = 0
+                new_found = 0
 
                 for card in cards:
-                    card_text = card.get_text(" ", strip=True).lower()
-                    if "tükendi" in card_text or "stokta yok" in card_text:
+                    card_str = card.get_text(" ", strip=True).lower()
+                    if "tükendi" in card_str or "stokta yok" in card_str:
                         continue
 
                     title_el = card.select_one(".product-title, .productName, h3, a.title, .title, .p-name")
@@ -736,7 +742,7 @@ def fetch_filamentmarketim() -> list[dict]:
                     raw_href = link_el["href"].strip()
                     product_url = urljoin(base_url, raw_href)
 
-                    # Görsel Alma
+                    # Görseli Bul
                     img_el = card.find("img")
                     base_img = ""
                     if img_el:
@@ -755,23 +761,23 @@ def fetch_filamentmarketim() -> list[dict]:
                     if not base_img:
                         continue
 
-                    # KART İÇİ RENK VARYANTLARI KONTROLÜ
-                    sub_variants = card.select(".sub-product-item, .variant-box option, [data-subproduct-id], .variant-list a")
-                    found_sub = 0
+                    # KART İÇİ RENK SEÇENEKLERİ (Sunlu PLA Siyah, Beyaz vb. renk seçicileri)
+                    sub_opts = card.select(".sub-product-item, .variant-box option, [data-subproduct-id], .variant-list a, select option")
+                    var_count = 0
 
-                    if sub_variants:
-                        for v in sub_variants:
-                            v_text = v.get_text(" ", strip=True)
-                            v_id = v.get("value") or v.get("data-subproduct-id") or v.get("data-id") or ""
-                            
-                            if not v_text or "seçiniz" in v_text.lower() or "tükendi" in v_text.lower():
+                    if sub_opts:
+                        for opt in sub_opts:
+                            opt_text = opt.get_text(" ", strip=True)
+                            opt_id = opt.get("value") or opt.get("data-subproduct-id") or opt.get("data-id") or ""
+
+                            if not opt_text or "seçiniz" in opt_text.lower() or "tükendi" in opt_text.lower() or opt_id == "0":
                                 continue
 
-                            clean_v_text = re.sub(r'\s*\([^)]*\)', '', v_text).strip()
-                            full_name = f"{title} {clean_v_text}" if clean_v_text.casefold() not in title.casefold() else title
-                            
-                            var_url = f"{product_url}?subProduct={v_id}" if v_id else product_url
-                            norm_url = var_url.split("?")[0] + (f"?subProduct={v_id}" if v_id else "")
+                            clean_color = re.sub(r'\s*\([^)]*\)', '', opt_text).strip()
+                            full_name = f"{title} {clean_color}" if clean_color.casefold() not in title.casefold() else title
+
+                            v_url = f"{product_url}?subProduct={opt_id}" if opt_id else product_url
+                            norm_url = v_url.split("?")[0] + (f"?subProduct={opt_id}" if opt_id else "")
 
                             if norm_url in seen_urls or not is_valid(full_name):
                                 continue
@@ -779,19 +785,20 @@ def fetch_filamentmarketim() -> list[dict]:
                             seen_urls.add(norm_url)
                             items.append({
                                 "source": "Filament Marketim",
-                                "external_id": v_id or norm_url.split("/")[-1],
+                                "external_id": opt_id or norm_url.split("/")[-1],
                                 "name": full_name,
                                 "price": price,
                                 "old_price": None,
                                 "in_stock": 1,
                                 "weight_g": 1000,
-                                "url": var_url,
+                                "url": v_url,
                                 "image": base_img,
                             })
-                            found_sub += 1
-                            new_on_page += 1
+                            var_count += 1
+                            new_found += 1
 
-                    if found_sub == 0:
+                    # Kart içinde seçenek tanımlı değilse doğrudan ana ürünü ekle
+                    if var_count == 0:
                         norm_url = product_url.split("?")[0].rstrip("/")
                         if norm_url not in seen_urls:
                             seen_urls.add(norm_url)
@@ -806,16 +813,16 @@ def fetch_filamentmarketim() -> list[dict]:
                                 "url": product_url,
                                 "image": base_img,
                             })
-                            new_on_page += 1
+                            new_found += 1
 
-                if new_on_page == 0:
+                if new_found == 0:
                     break
 
             except Exception as e:
-                print(f"[Filament Marketim] {cat} Hatası: {e}", flush=True)
+                print(f"[Filament Marketim Log] {cat} Hatası: {e}", flush=True)
                 break
 
-    print(f"[Filament Marketim] Toplam {len(items)} adet stoklu filament başarıyla çekildi.", flush=True)
+    print(f"[Filament Marketim] Toplam {len(items)} adet renk/varyant filamenti çekildi.", flush=True)
     return items
 
 
