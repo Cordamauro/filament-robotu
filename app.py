@@ -675,6 +675,119 @@ def fetch_robotistan() -> list[dict]:
     return items
 
 
+# FİLAMENT MARKETİM - HIZLI VE STABİL KATEGORİ SCRAPERI
+def fetch_filamentmarketim() -> list[dict]:
+    items = []
+    seen_urls = set()
+    session = requests.Session()
+
+    session.headers.update(
+        {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/128.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+        }
+    )
+
+    base_url = "https://www.filamentmarketim.com"
+    target_categories = [
+        "/pla-filament",
+        "/petg-filament",
+        "/abs-filament",
+        "/tpu-flex-filament",
+    ]
+
+    for cat in target_categories:
+        for page_number in range(1, 10):
+            try:
+                page_url = f"{base_url}{cat}?tp={page_number}" if page_number > 1 else f"{base_url}{cat}"
+                res = session.get(page_url, timeout=10)
+
+                if res.status_code != 200:
+                    break
+
+                soup = BeautifulSoup(res.text, "html.parser")
+                cards = soup.select(
+                    ".product-item, .productItem, .showProductScheme, "
+                    "[class*='product'], .p-card, .product-box, .product-detail-card"
+                )
+
+                if not cards:
+                    break
+
+                new_on_page = 0
+
+                for card in cards:
+                    card_text = card.get_text(" ", strip=True).lower()
+                    if "tükendi" in card_text or "stokta yok" in card_text:
+                        continue
+
+                    title_el = card.select_one(".product-title, .productName, h3, a.title, .title, .p-name")
+                    price_el = card.select_one(".product-price, .price, .current-price, .p-price")
+                    link_el = card.find("a", href=True)
+
+                    if not title_el or not price_el or not link_el:
+                        continue
+
+                    title = title_el.get_text(" ", strip=True)
+                    price = clean_price(price_el.get_text(" ", strip=True))
+
+                    if not title or not price or price <= 0 or not is_valid(title):
+                        continue
+
+                    raw_href = link_el["href"].strip()
+                    product_url = urljoin(base_url, raw_href)
+                    norm_url = product_url.split("?")[0].rstrip("/")
+
+                    if norm_url in seen_urls:
+                        continue
+
+                    img_el = card.find("img")
+                    base_img = ""
+                    if img_el:
+                        raw_img = (
+                            img_el.get("data-original")
+                            or img_el.get("data-src")
+                            or img_el.get("src")
+                            or ""
+                        ).strip()
+
+                        if raw_img and "blank" not in raw_img.lower():
+                            if raw_img.startswith("//"): raw_img = "https:" + raw_img
+                            elif not raw_img.startswith("http"): raw_img = urljoin(base_url, raw_img)
+                            base_img = f"https://wsrv.nl/?url={raw_img}"
+
+                    if not base_img:
+                        continue
+
+                    seen_urls.add(norm_url)
+                    items.append({
+                        "source": "Filament Marketim",
+                        "external_id": norm_url.split("/")[-1],
+                        "name": title,
+                        "price": price,
+                        "old_price": None,
+                        "in_stock": 1,
+                        "weight_g": 1000,
+                        "url": product_url,
+                        "image": base_img,
+                    })
+                    new_on_page += 1
+
+                if new_on_page == 0:
+                    break
+
+            except Exception:
+                break
+
+    print(f"[Filament Marketim] Kategori sayfalarından toplam {len(items)} ürün çekildi.", flush=True)
+    return items
+
+
 def run_update():
     if not update_lock.acquire(blocking=False):
         print(
@@ -695,7 +808,7 @@ def run_update():
                     """,
                     (f"%{term.casefold()}%",),
                 )
-            connection.execute("DELETE FROM products WHERE source IN ('3dcim', 'Filament Marketim')")
+            connection.execute("DELETE FROM products WHERE source = '3dcim'")
 
         # 1. Porima Taraması
         porima_items = fetch_porima()
@@ -712,6 +825,14 @@ def run_update():
                 connection.execute("DELETE FROM products WHERE source = 'Robotistan'")
             robotistan_count = save_items(robotistan_items)
             print(f"[Robotistan] -> {robotistan_count} benzersiz ürün kaydedildi.", flush=True)
+
+        # 3. Filament Marketim Taraması
+        fm_items = fetch_filamentmarketim()
+        if fm_items:
+            with db() as connection:
+                connection.execute("DELETE FROM products WHERE source = 'Filament Marketim'")
+            fm_count = save_items(fm_items)
+            print(f"[Filament Marketim] -> {fm_count} benzersiz ürün kaydedildi.", flush=True)
 
         with db() as connection:
             connection.execute(
@@ -752,6 +873,8 @@ def products():
             filters.append("LOWER(source) LIKE '%porima%'")
         elif field == "source" and "robotistan" in value.casefold():
             filters.append("LOWER(source) LIKE '%robotistan%'")
+        elif field == "source" and "filament" in value.casefold():
+            filters.append("LOWER(source) LIKE '%filament marketim%'")
         else:
             filters.append(f"{field} = ?")
             parameters.append(value)
