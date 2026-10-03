@@ -8,7 +8,6 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import urljoin
 
-import cloudscraper
 import requests
 from bs4 import BeautifulSoup
 from flask import Flask, jsonify, render_template, request
@@ -676,153 +675,6 @@ def fetch_robotistan() -> list[dict]:
     return items
 
 
-# FİLAMENT MARKETİM - CLOUDSCRAPER ILE CLOUDFLARE BYPASS SCRAPER
-def fetch_filamentmarketim() -> list[dict]:
-    items = []
-    seen_urls = set()
-    base_url = "https://www.filamentmarketim.com"
-
-    # Cloudflare güvenlik duvarını Chrome tarayıcısı gibi taklit eden scraper
-    scraper = cloudscraper.create_scraper(
-        browser={
-            'browser': 'chrome',
-            'platform': 'windows',
-            'desktop': True
-        }
-    )
-
-    target_categories = [
-        "/pla-filament",
-        "/petg-filament",
-        "/abs-filament",
-        "/tpu-flex-filament",
-    ]
-
-    for cat in target_categories:
-        for page_number in range(1, 15):
-            try:
-                page_url = f"{base_url}{cat}?tp={page_number}" if page_number > 1 else f"{base_url}{cat}"
-                res = scraper.get(page_url, timeout=15)
-
-                if res.status_code != 200:
-                    break
-
-                soup = BeautifulSoup(res.text, "html.parser")
-                cards = soup.select(
-                    ".product-item, .productItem, .showProductScheme, "
-                    "[class*='product-box'], .p-card, .product-detail-card, .ItemOrj"
-                )
-
-                if not cards:
-                    break
-
-                new_on_page = 0
-
-                for card in cards:
-                    card_text = card.get_text(" ", strip=True).lower()
-                    if "tükendi" in card_text or "stokta yok" in card_text:
-                        continue
-
-                    title_el = card.select_one(".product-title, .productName, h3, a.title, .title, .p-name")
-                    price_el = card.select_one(".product-price, .price, .current-price, .p-price")
-                    link_el = card.find("a", href=True)
-
-                    if not title_el or not price_el or not link_el:
-                        continue
-
-                    title = title_el.get_text(" ", strip=True)
-                    price = clean_price(price_el.get_text(" ", strip=True))
-
-                    if not title or not price or price <= 0 or not is_valid(title):
-                        continue
-
-                    raw_href = link_el["href"].strip()
-                    product_url = urljoin(base_url, raw_href)
-
-                    # Görseli Bul
-                    img_el = card.find("img")
-                    base_img = ""
-                    if img_el:
-                        raw_img = (
-                            img_el.get("data-original")
-                            or img_el.get("data-src")
-                            or img_el.get("src")
-                            or ""
-                        ).strip()
-
-                        if raw_img and "blank" not in raw_img.lower():
-                            if raw_img.startswith("//"): raw_img = "https:" + raw_img
-                            elif not raw_img.startswith("http"): raw_img = urljoin(base_url, raw_img)
-                            base_img = f"https://wsrv.nl/?url={raw_img}"
-
-                    if not base_img:
-                        continue
-
-                    # KART İÇİ RENK SEÇENEKLERİ (Sunlu PLA Siyah, Beyaz vb. renk seçicileri)
-                    sub_opts = card.select(".sub-product-item, .variant-box option, [data-subproduct-id], .variant-list a, select option")
-                    var_count = 0
-
-                    if sub_opts:
-                        for opt in sub_opts:
-                            opt_text = opt.get_text(" ", strip=True)
-                            opt_id = opt.get("value") or opt.get("data-subproduct-id") or opt.get("data-id") or ""
-
-                            if not opt_text or "seçiniz" in opt_text.lower() or "tükendi" in opt_text.lower() or opt_id == "0":
-                                continue
-
-                            clean_color = re.sub(r'\s*\([^)]*\)', '', opt_text).strip()
-                            full_name = f"{title} {clean_color}" if clean_color.casefold() not in title.casefold() else title
-
-                            v_url = f"{product_url}?subProduct={opt_id}" if opt_id else product_url
-                            norm_url = v_url.split("?")[0] + (f"?subProduct={opt_id}" if opt_id else "")
-
-                            if norm_url in seen_urls or not is_valid(full_name):
-                                continue
-
-                            seen_urls.add(norm_url)
-                            items.append({
-                                "source": "Filament Marketim",
-                                "external_id": opt_id or norm_url.split("/")[-1],
-                                "name": full_name,
-                                "price": price,
-                                "old_price": None,
-                                "in_stock": 1,
-                                "weight_g": 1000,
-                                "url": v_url,
-                                "image": base_img,
-                            })
-                            var_count += 1
-                            new_on_page += 1
-
-                    # Kart içinde seçenek tanımlı değilse doğrudan ana ürünü ekle
-                    if var_count == 0:
-                        norm_url = product_url.split("?")[0].rstrip("/")
-                        if norm_url not in seen_urls:
-                            seen_urls.add(norm_url)
-                            items.append({
-                                "source": "Filament Marketim",
-                                "external_id": norm_url.split("/")[-1],
-                                "name": title,
-                                "price": price,
-                                "old_price": None,
-                                "in_stock": 1,
-                                "weight_g": 1000,
-                                "url": product_url,
-                                "image": base_img,
-                            })
-                            new_on_page += 1
-
-                if new_on_page == 0:
-                    break
-
-            except Exception as e:
-                print(f"[Filament Marketim Log] {cat} Hatası: {e}", flush=True)
-                break
-
-    print(f"[Filament Marketim] cloudscraper ile {len(items)} adet renk/varyant filamenti çekildi.", flush=True)
-    return items
-
-
 def run_update():
     if not update_lock.acquire(blocking=False):
         print(
@@ -843,7 +695,7 @@ def run_update():
                     """,
                     (f"%{term.casefold()}%",),
                 )
-            connection.execute("DELETE FROM products WHERE source = '3dcim'")
+            connection.execute("DELETE FROM products WHERE source IN ('3dcim', 'Filament Marketim')")
 
         # 1. Porima Taraması
         porima_items = fetch_porima()
@@ -860,14 +712,6 @@ def run_update():
                 connection.execute("DELETE FROM products WHERE source = 'Robotistan'")
             robotistan_count = save_items(robotistan_items)
             print(f"[Robotistan] -> {robotistan_count} benzersiz ürün kaydedildi.", flush=True)
-
-        # 3. Filament Marketim Taraması
-        fm_items = fetch_filamentmarketim()
-        if fm_items:
-            with db() as connection:
-                connection.execute("DELETE FROM products WHERE source = 'Filament Marketim'")
-            fm_count = save_items(fm_items)
-            print(f"[Filament Marketim] -> {fm_count} benzersiz ürün kaydedildi.", flush=True)
 
         with db() as connection:
             connection.execute(
@@ -908,8 +752,6 @@ def products():
             filters.append("LOWER(source) LIKE '%porima%'")
         elif field == "source" and "robotistan" in value.casefold():
             filters.append("LOWER(source) LIKE '%robotistan%'")
-        elif field == "source" and "filament" in value.casefold():
-            filters.append("LOWER(source) LIKE '%filament marketim%'")
         else:
             filters.append(f"{field} = ?")
             parameters.append(value)
