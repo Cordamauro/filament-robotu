@@ -1,726 +1,434 @@
+Sol kenar çubuğu ve üst barı **`#3b445d`** rengine uyarlanmış, tüm modern dinamik filtreleri ve responsive yapısıyla eksiksiz **`templates/index.html`** dosyası:
+
+```html
 <!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Filament Arama Motoru - Fiyat Karşılaştırma</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <title>3D Filament Robotu</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
     <style>
-        * {
-            box-sizing: border-box;
+        :root {
+            --brand-color: #3b445d;
+            --brand-dark: #2d3648;
+            --brand-light: #4a5470;
+            --bg-body: #f4f6f9;
         }
 
         body {
-            font-family: 'Inter', sans-serif !important;
-            background-color: #111111;
-            color: #d1d1d1;
-            margin: 0;
-            padding: 0;
-            overflow-x: hidden;
-            font-size: 13px;
+            background-color: var(--bg-body);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #333;
         }
 
-        /* ÖZEL KOYU İNCE SCROLLBAR */
-        ::-webkit-scrollbar {
-            width: 5px;
-            height: 5px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #171717;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #333333;
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #ff9900;
+        /* Üst Bar (Header / Navbar) */
+        .top-navbar {
+            background-color: var(--brand-color) !important;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+            padding: 0.8rem 1.5rem;
         }
 
-        .app-container {
-            display: flex;
-            min-height: 100vh;
+        .navbar-brand {
+            color: #ffffff !important;
+            font-weight: 700;
+            font-size: 1.35rem;
+            letter-spacing: 0.5px;
         }
 
-        /* SOL SIDEBAR (210px) */
+        /* Sol Kenar Çubuğu (Sidebar) */
         .sidebar {
-            width: 210px;
-            background-color: #171717;
-            border-right: 1px solid #282828;
-            padding: 0.8rem 0.6rem;
-            flex-shrink: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 0.6rem;
-            overflow-y: auto;
-            max-height: 100vh;
-        }
-
-        /* LOGO VE BAŞLIK ALANI (TIKLANABİLİR) */
-        .sidebar-brand {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding-bottom: 0.6rem;
-            border-bottom: 1px solid #282828;
-            margin-bottom: 0.2rem;
-            cursor: pointer;
-            text-decoration: none;
-            user-select: none;
-        }
-
-        .sidebar-brand:hover .brand-text {
+            background-color: var(--brand-color);
             color: #ffffff;
+            min-height: calc(100vh - 62px);
+            padding: 1.5rem;
+            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.08);
         }
 
-        .owl-logo-circle {
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            background-color: #e8d8c8;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-            transition: transform 0.2s ease;
-        }
-
-        .sidebar-brand:hover .owl-logo-circle {
-            transform: scale(1.05);
-        }
-
-        .brand-text {
-            font-size: 1rem;
-            font-weight: 800;
+        .sidebar h5 {
             color: #ffffff;
-            letter-spacing: -0.3px;
-        }
-
-        .brand-text span {
-            color: #ff9900;
-        }
-
-        /* AKORDEON ELEMANLARI */
-        .accordion-item-custom {
-            border-bottom: 1px solid #222222;
-            padding-bottom: 0.4rem;
-        }
-
-        .accordion-header-custom {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 0.72rem;
-            font-weight: 800;
-            color: #ffffff;
-            letter-spacing: 0.6px;
-            text-transform: uppercase;
-            cursor: pointer;
-            padding: 0.35rem 0.2rem;
-            user-select: none;
-            transition: color 0.15s;
-        }
-
-        .accordion-header-custom:hover {
-            color: #ff9900;
-        }
-
-        .accordion-icon {
-            font-size: 0.95rem;
+            font-size: 1.05rem;
             font-weight: 600;
-            color: #888888;
+            border-bottom: 1px solid var(--brand-light);
+            padding-bottom: 0.5rem;
+            margin-bottom: 1.2rem;
         }
 
-        .accordion-content {
-            display: none;
-            flex-direction: column;
-            gap: 5px;
-            margin-top: 0.4rem;
-            padding-bottom: 0.2rem;
-            padding-right: 4px;
-            max-height: 220px;
-            overflow-y: auto;
-        }
-
-        .accordion-item-custom.active .accordion-content {
-            display: flex;
-        }
-
-        /* FİLTRE VE SIRALAMA BUTONLARI */
-        .filter-btn-pill {
-            background-color: #222222;
-            border: 1px solid #2d2d2d;
-            color: #cccccc;
-            font-size: 0.75rem;
+        .sidebar .form-label {
+            color: #e2e8f0;
+            font-size: 0.85rem;
             font-weight: 500;
-            padding: 0.45rem 0.7rem;
-            min-height: 32px;
+            margin-bottom: 0.3rem;
+        }
+
+        .sidebar .form-select, 
+        .sidebar .form-control {
+            background-color: var(--brand-dark);
+            border: 1px solid var(--brand-light);
+            color: #ffffff;
+            font-size: 0.9rem;
             border-radius: 6px;
-            text-align: left;
-            cursor: pointer;
-            transition: all 0.15s ease;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            display: flex;
-            align-items: center;
-            line-height: 1;
         }
 
-        .filter-btn-pill:hover {
-            background-color: #2a2a2a;
+        .sidebar .form-select:focus, 
+        .sidebar .form-control:focus {
+            background-color: var(--brand-dark);
             color: #ffffff;
-            border-color: #3d3d3d;
+            border-color: #7a869a;
+            box-shadow: 0 0 0 0.2rem rgba(255, 255, 255, 0.1);
         }
 
-        .filter-btn-pill.selected {
-            background-color: #ff9900;
-            color: #111111;
-            border-color: #ff9900;
-            font-weight: 700;
-        }
-
-        /* SAĞ ANA İÇERİK ALANI */
-        .main-content {
-            flex-grow: 1;
-            background-color: #e2e2e2;
-            color: #222222;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .top-bar {
-            background-color: #171717;
+        .sidebar option {
+            background-color: var(--brand-dark);
             color: #ffffff;
-            padding: 0.6rem 1rem;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 1rem;
-            border-bottom: 1px solid #282828;
         }
 
-        .search-container {
-            flex-grow: 1;
-            max-width: 480px;
-            display: flex;
-            gap: 6px;
-        }
-
-        .search-input-dark {
-            background-color: #242424;
-            border: 1px solid #333333;
+        .btn-reset {
+            background-color: var(--brand-light);
             color: #ffffff;
-            font-size: 0.8rem;
-            padding: 0.35rem 0.7rem;
-            border-radius: 5px;
-        }
-
-        .search-input-dark:focus {
-            background-color: #2a2a2a;
-            color: #ffffff;
-            border-color: #ff9900;
-            box-shadow: none;
-        }
-
-        .search-input-dark::placeholder {
-            color: #777777;
-        }
-
-        .btn-icon-square {
-            width: 32px;
-            height: 32px;
-            flex-shrink: 0;
             border: none;
-            border-radius: 5px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: background 0.15s;
-        }
-
-        .btn-update-dark {
-            background: #ff9900;
-            color: #111111;
-        }
-
-        .btn-update-dark:hover {
-            background: #e68a00;
-        }
-
-        .btn-clear-dark {
-            background: #2a2a2a;
-            border: 1px solid #3a3a3a;
-            color: #ffffff;
-        }
-
-        .btn-clear-dark:hover {
-            background: #383838;
-        }
-
-        .stats-bar {
-            font-size: 0.8rem;
-            color: #999999;
+            width: 100%;
+            padding: 0.5rem;
             font-weight: 500;
+            font-size: 0.9rem;
+            transition: all 0.2s;
         }
 
-        .stats-bar span {
+        .btn-reset:hover {
+            background-color: #5a6685;
             color: #ffffff;
-            font-weight: 700;
         }
 
-        /* GRID ÜRÜN KARTLARI (TEK SATIRDA 8 KART) */
-        .products-grid {
-            padding: 0.8rem;
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-            gap: 0.8rem;
-            overflow-y: auto;
-        }
-
-        .filament-card {
+        /* Ürün Kartları */
+        .product-card {
             background: #ffffff;
-            border-radius: 6px;
-            border: 1px solid #d5d5d5;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.03);
+            border-radius: 10px;
+            border: 1px solid #e2e8f0;
+            transition: transform 0.2s, box-shadow 0.2s;
+            height: 100%;
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            position: relative;
-            transition: transform 0.12s ease, box-shadow 0.12s ease;
         }
 
-        .filament-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+        .product-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
         }
 
-        .card-color-strip {
-            height: 3px;
+        .card-img-container {
+            height: 200px;
             width: 100%;
-        }
-
-        .card-img-wrap {
-            height: 135px;
-            background: #fafafa;
-            padding: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
+            background: #fafafa;
+            padding: 1rem;
             border-bottom: 1px solid #f0f0f0;
-            cursor: pointer;
-            text-decoration: none;
         }
 
-        .card-img-wrap img {
+        .card-img-container img {
             max-height: 100%;
             max-width: 100%;
             object-fit: contain;
-            transition: transform 0.15s ease;
         }
 
-        .card-img-wrap:hover img {
-            transform: scale(1.05);
-        }
-
-        .card-body-custom {
-            padding: 10px;
+        .card-body {
+            padding: 1.2rem;
             display: flex;
             flex-direction: column;
             flex-grow: 1;
         }
 
-        .brand-badge {
-            font-size: 0.65rem;
-            font-weight: 700;
-            color: #888888;
-            text-transform: uppercase;
-            letter-spacing: 0.4px;
-            margin-bottom: 3px;
-        }
-
-        .product-title-custom {
-            font-size: 0.8rem;
+        .product-title {
+            font-size: 0.95rem;
             font-weight: 600;
-            color: #111111;
-            line-height: 1.2;
-            height: 2.4em;
+            color: #2d3748;
+            line-height: 1.3;
+            height: 2.6rem;
             overflow: hidden;
             display: -webkit-box;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
-            margin-bottom: 6px;
+            margin-bottom: 0.8rem;
         }
 
-        .tags-row {
-            display: flex;
-            gap: 4px;
-            margin-bottom: 8px;
-            flex-wrap: wrap;
-        }
-
-        .tag-pill {
-            font-size: 0.65rem;
-            font-weight: 600;
-            padding: 2px 6px;
-            border-radius: 4px;
-            background: #f2f2f2;
-            color: #555555;
-            border: 1px solid #e2e2e2;
-        }
-
-        .price-section {
-            margin-top: auto;
-            padding-top: 6px;
-            border-top: 1px solid #f4f4f4;
-            display: flex;
-            align-items: baseline;
-            justify-content: space-between;
-        }
-
-        .price-main {
-            font-size: 1rem;
-            font-weight: 800;
-            color: #111111;
-        }
-
-        .price-sub {
-            font-size: 0.7rem;
-            color: #777777;
-            font-weight: 600;
-        }
-
-        .btn-buy-orange {
-            background-color: #ff9900;
-            color: #ffffff;
+        .badge-tag {
             font-size: 0.75rem;
-            font-weight: 700;
-            text-align: center;
-            text-decoration: none;
-            padding: 6px;
+            padding: 0.3em 0.6em;
             border-radius: 4px;
-            margin-top: 6px;
-            display: block;
-            transition: background 0.15s;
+            font-weight: 500;
         }
 
-        .btn-buy-orange:hover {
-            background-color: #e68a00;
+        .price-tag {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #2b6cb0;
+        }
+
+        .kg-price {
+            font-size: 0.8rem;
+            color: #718096;
+        }
+
+        .btn-go {
+            background-color: var(--brand-color);
+            color: #ffffff;
+            font-size: 0.85rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 6px;
+            padding: 0.5rem 1rem;
+            text-decoration: none;
+            display: block;
+            text-align: center;
+            transition: background 0.2s;
+        }
+
+        .btn-go:hover {
+            background-color: var(--brand-dark);
             color: #ffffff;
         }
 
-        .svg-icon {
-            width: 14px;
-            height: 14px;
-            fill: currentColor;
-        }
-
-        .spinning {
-            animation: spin 1s infinite linear;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        /* Yükleniyor Göstergesi */
+        .spinner-container {
+            min-height: 300px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
         }
     </style>
 </head>
 <body>
 
-<div class="app-container">
-    <!-- SOL SIDEBAR -->
-    <aside class="sidebar">
-        <!-- LOGO VE BAŞLIK (TIKLANINCA ANA SAYFAYA SIFIRLAR) -->
-        <a class="sidebar-brand" onclick="clearAllFilters()">
-            <div class="owl-logo-circle">
-                <svg width="26" height="26" viewBox="0 0 100 100" fill="none">
-                    <path d="M50 18C40 18 30 22 28 28C28 38 35 48 50 48C65 48 72 38 72 28C70 22 60 18 50 18Z" fill="#3e2312"/>
-                    <circle cx="38" cy="38" r="10" fill="#3e2312"/>
-                    <circle cx="62" cy="38" r="10" fill="#3e2312"/>
-                    <circle cx="38" cy="38" r="6" fill="#e8d8c8"/>
-                    <circle cx="62" cy="38" r="6" fill="#e8d8c8"/>
-                    <circle cx="38" cy="38" r="3" fill="#3e2312"/>
-                    <circle cx="62" cy="38" r="3" fill="#3e2312"/>
-                    <polygon points="50,42 46,50 54,50" fill="#e8d8c8"/>
-                    <path d="M26 44C26 65 38 85 50 85C62 85 74 65 74 44C65 52 50 54 50 54C50 54 35 52 26 44Z" fill="#3e2312"/>
-                </svg>
-            </div>
-            <div class="brand-text">Filament<span>Robotu</span></div>
-        </a>
-
-        <!-- SIRALAMA -->
-        <div class="accordion-item-custom">
-            <div class="accordion-header-custom" onclick="toggleAccordion(this)">
-                <span>SIRALAMA</span>
-                <span class="accordion-icon">+</span>
-            </div>
-            <div id="listSort" class="accordion-content">
-                <button class="filter-btn-pill" onclick="selectSort('asc')" id="sort_asc">Küçükten Büyüğe</button>
-                <button class="filter-btn-pill" onclick="selectSort('desc')" id="sort_desc">Büyükten Küçüğe</button>
-                <button class="filter-btn-pill" onclick="selectSort('date')" id="sort_date">Tarihe Göre</button>
-            </div>
-        </div>
-
-        <!-- MATERYAL -->
-        <div class="accordion-item-custom">
-            <div class="accordion-header-custom" onclick="toggleAccordion(this)">
-                <span>MATERYAL</span>
-                <span class="accordion-icon">+</span>
-            </div>
-            <div id="listMaterial" class="accordion-content"></div>
-        </div>
-
-        <!-- MARKA -->
-        <div class="accordion-item-custom">
-            <div class="accordion-header-custom" onclick="toggleAccordion(this)">
-                <span>MARKA</span>
-                <span class="accordion-icon">+</span>
-            </div>
-            <div id="listBrand" class="accordion-content"></div>
-        </div>
-
-        <!-- RENK -->
-        <div class="accordion-item-custom">
-            <div class="accordion-header-custom" onclick="toggleAccordion(this)">
-                <span>RENK</span>
-                <span class="accordion-icon">+</span>
-            </div>
-            <div id="listColor" class="accordion-content"></div>
-        </div>
-
-        <!-- MAĞAZA -->
-        <div class="accordion-item-custom">
-            <div class="accordion-header-custom" onclick="toggleAccordion(this)">
-                <span>MAĞAZA</span>
-                <span class="accordion-icon">+</span>
-            </div>
-            <div id="listSource" class="accordion-content"></div>
-        </div>
-    </aside>
-
-    <!-- SAĞ ANA İÇERİK ALANI -->
-    <main class="main-content">
-        <!-- ÜST ARAMA BAR -->
-        <header class="top-bar">
-            <div class="search-container">
-                <input type="text" id="searchQuery" class="form-control search-input-dark" placeholder="Arama yapın..." onkeyup="loadProducts()">
-                
-                <button id="btnUpdate" class="btn-icon-square btn-update-dark" title="Verileri Güncelle" onclick="triggerUpdate()">
-                    <svg id="updateIcon" class="svg-icon" viewBox="0 0 24 24">
-                        <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
-                    </svg>
+    <!-- Üst Bar -->
+    <nav class="navbar navbar-dark top-navbar sticky-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <i class="fa-solid fa-cube me-2"></i>3D Filament Robotu
+            </a>
+            <div class="d-flex align-items-center gap-3">
+                <span class="badge bg-light text-dark" id="totalCountBadge">0 Ürün</span>
+                <button class="btn btn-outline-light btn-sm" id="btnUpdate" onclick="triggerUpdate()">
+                    <i class="fa-solid fa-arrows-rotate me-1"></i> Fiyatları Güncelle
                 </button>
+            </div>
+        </div>
+    </nav>
 
-                <button class="btn-icon-square btn-clear-dark" title="Filtreleri Temizle" onclick="clearAllFilters()">
-                    <svg class="svg-icon" viewBox="0 0 24 24">
-                        <path d="M19.36 6.36l-1.42-1.42L12 10.59 6.06 4.64 4.64 6.06 10.59 12l-5.95 5.94 1.42 1.42L12 13.41l5.94 5.95 1.42-1.42L13.41 12z"/>
-                    </svg>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sol Kenar Çubuğu (Filtreler) -->
+            <div class="col-lg-3 col-xl-2 sidebar">
+                <h5><i class="fa-solid fa-filter me-2"></i>Filtreler</h5>
+
+                <div class="mb-3">
+                    <label class="form-label">Arama</label>
+                    <input type="text" id="filterSearch" class="form-control" placeholder="PLA, Siyah, Porima..." oninput="applyFilters()">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Satıcı / Kaynak</label>
+                    <select id="filterSource" class="form-select" onchange="applyFilters()">
+                        <option value="">Tümü</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Marka</label>
+                    <select id="filterBrand" class="form-select" onchange="applyFilters()">
+                        <option value="">Tümü</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Malzeme Türü</label>
+                    <select id="filterMaterial" class="form-select" onchange="applyFilters()">
+                        <option value="">Tümü</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Renk</label>
+                    <select id="filterColor" class="form-select" onchange="applyFilters()">
+                        <option value="">Tümü</option>
+                    </select>
+                </div>
+
+                <button class="btn btn-reset mt-2" onclick="resetFilters()">
+                    <i class="fa-solid fa-rotate-left me-1"></i> Sıfırla
                 </button>
             </div>
 
-            <div id="resultCount" class="stats-bar">Yükleniyor...</div>
-        </header>
+            <!-- Sağ İçerik Alanı (Ürün Listesi) -->
+            <div class="col-lg-9 col-xl-10 p-4">
+                <div id="loading" class="spinner-container">
+                    <div class="spinner-border text-secondary mb-3" role="status"></div>
+                    <span class="text-muted">Filamentler yükleniyor...</span>
+                </div>
 
-        <!-- GRID ÜRÜN KARTLARI -->
-        <div id="productList" class="products-grid">
-            <div class="text-center w-100 py-5 text-secondary">
-                <div class="spinner-border text-dark" role="status"></div>
-                <p class="mt-2">Filamentler Yükleniyor...</p>
+                <div id="productList" class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-xl-4 g-4 d-none">
+                    <!-- Ürün Kartları JS ile Gelecek -->
+                </div>
+
+                <div id="noResults" class="text-center py-5 d-none">
+                    <i class="fa-solid fa-box-open fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">Aradığınız kriterlere uygun filament bulunamadı.</h5>
+                </div>
             </div>
         </div>
-    </main>
-</div>
+    </div>
 
-<script>
-let selectedFilters = {
-    source: '',
-    brand: '',
-    material: '',
-    color: ''
-};
+    <script>
+        let allProducts = [];
 
-// Varsayılan sıralama küçükten büyüğe (asc) ama manuel seçilmediği için görünürde 'none'
-let currentSort = 'asc'; 
-let sortUserSelected = false;
+        async function fetchFilters() {
+            try {
+                const response = await fetch('/api/filters');
+                const data = await response.json();
 
-function toggleAccordion(headerElem) {
-    const item = headerElem.parentElement;
-    const icon = headerElem.querySelector('.accordion-icon');
-    item.classList.toggle('active');
-    icon.textContent = item.classList.contains('active') ? '-' : '+';
-}
-
-function getColorHex(colorName) {
-    if (!colorName) return '#adb5bd';
-    const c = colorName.toLowerCase().trim();
-    if (c.includes('kırmızı')) return '#dc3545';
-    if (c.includes('mavi')) return '#0d6efd';
-    if (c.includes('yeşil')) return '#198754';
-    if (c.includes('sarı')) return '#ffc107';
-    if (c.includes('siyah')) return '#212529';
-    if (c.includes('beyaz')) return '#cccccc';
-    if (c.includes('turuncu')) return '#fd7e14';
-    if (c.includes('mor')) return '#6f42c1';
-    if (c.includes('pembe')) return '#d63384';
-    if (c.includes('gri')) return '#6c757d';
-    return '#ff9900';
-}
-
-async function loadFilters() {
-    try {
-        const res = await fetch('/api/filters');
-        const data = await res.json();
-        
-        renderPills('listSource', data.source, 'source');
-        renderPills('listBrand', data.brand, 'brand');
-        renderPills('listMaterial', data.material, 'material');
-        renderPills('listColor', data.color, 'color');
-    } catch (e) {
-        console.error(e);
-    }
-}
-
-function renderPills(containerId, items, filterType) {
-    const container = document.getElementById(containerId);
-    if (!items || items.length === 0) {
-        container.innerHTML = `<span class="text-muted" style="font-size:0.7rem;">Veri yok</span>`;
-        return;
-    }
-
-    container.innerHTML = items.map(item => {
-        const isSelected = selectedFilters[filterType] === item;
-        return `
-            <button class="filter-btn-pill ${isSelected ? 'selected' : ''}" 
-                    onclick="selectFilter('${filterType}', '${item}')"
-                    title="${item}">
-                <span>${item}</span>
-            </button>
-        `;
-    }).join('');
-}
-
-function selectFilter(filterType, value) {
-    if (selectedFilters[filterType] === value) {
-        selectedFilters[filterType] = '';
-    } else {
-        selectedFilters[filterType] = value;
-    }
-    loadFilters();
-    loadProducts();
-}
-
-function selectSort(sortType) {
-    if (sortUserSelected && currentSort === sortType) {
-        // İkinci kez basılırsa seçimi kaldırır (otomatik asc'ye döner)
-        currentSort = 'asc';
-        sortUserSelected = false;
-    } else {
-        currentSort = sortType;
-        sortUserSelected = true;
-    }
-    updateSortUI();
-    loadProducts();
-}
-
-function updateSortUI() {
-    ['asc', 'desc', 'date'].forEach(type => {
-        const btn = document.getElementById('sort_' + type);
-        if (btn) {
-            if (sortUserSelected && currentSort === type) {
-                btn.classList.add('selected');
-            } else {
-                btn.classList.remove('selected');
+                populateSelect('filterSource', data.source);
+                populateSelect('filterBrand', data.brand);
+                populateSelect('filterMaterial', data.material);
+                populateSelect('filterColor', data.color);
+            } catch (err) {
+                console.error("Filtreler çekilemedi:", err);
             }
         }
-    });
-}
 
-async function loadProducts() {
-    const q = document.getElementById('searchQuery').value;
+        function populateSelect(elementId, options) {
+            const select = document.getElementById(elementId);
+            select.innerHTML = '<option value="">Tümü</option>';
+            if (options && options.length) {
+                options.forEach(opt => {
+                    const el = document.createElement('option');
+                    el.value = opt;
+                    el.textContent = opt;
+                    select.appendChild(el);
+                });
+            }
+        }
 
-    const url = `/api/products?source=${encodeURIComponent(selectedFilters.source)}&brand=${encodeURIComponent(selectedFilters.brand)}&material=${encodeURIComponent(selectedFilters.material)}&color=${encodeURIComponent(selectedFilters.color)}&q=${encodeURIComponent(q)}`;
-    
-    const res = await fetch(url);
-    let products = await res.json();
+        async function loadProducts() {
+            document.getElementById('loading').classList.remove('d-none');
+            document.getElementById('productList').classList.add('d-none');
+            document.getElementById('noResults').classList.add('d-none');
 
-    // JS Tarafında Dinamik Sıralama Uygulanır
-    if (currentSort === 'asc') {
-        products.sort((a, b) => (a.price || 0) - (b.price || 0));
-    } else if (currentSort === 'desc') {
-        products.sort((a, b) => (b.price || 0) - (a.price || 0));
-    } else if (currentSort === 'date') {
-        products.sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0));
-    }
-    
-    const countBar = document.getElementById('resultCount');
-    countBar.innerHTML = `Toplam <span>${products.length}</span> adet filament bulundu`;
+            try {
+                const response = await fetch('/api/products');
+                allProducts = await response.json();
+                
+                document.getElementById('totalCountBadge').textContent = `${allProducts.length} Ürün`;
+                renderProducts(allProducts);
+            } catch (err) {
+                console.error("Ürünler yüklenemedi:", err);
+            } finally {
+                document.getElementById('loading').classList.add('d-none');
+            }
+        }
 
-    const list = document.getElementById('productList');
-    if (products.length === 0) {
-        list.innerHTML = `<div class="w-100 text-center py-5 text-muted">Aramanızla eşleşen stokta filament bulunamadı.</div>`;
-        return;
-    }
+        function renderProducts(products) {
+            const container = document.getElementById('productList');
+            const noResults = document.getElementById('noResults');
+            container.innerHTML = '';
 
-    list.innerHTML = products.map(p => {
-        const fallbackImg = "https://via.placeholder.com/200x200?text=3D+Filament";
-        const imgSrc = p.image && p.image.trim() !== "" ? p.image : fallbackImg;
-        const stripColor = getColorHex(p.color);
+            if (products.length === 0) {
+                noResults.classList.remove('d-none');
+                return;
+            }
 
-        return `
-        <div class="filament-card">
-            <div class="card-color-strip" style="background-color: ${stripColor};"></div>
-            
-            <a href="${p.url}" target="_blank" class="card-img-wrap" title="${p.name} - Mağazaya Git">
-                <img src="${imgSrc}" alt="${p.name}" onerror="this.onerror=null;this.src='${fallbackImg}';">
-            </a>
+            noResults.classList.add('d-none');
+            container.classList.remove('d-none');
 
-            <div class="card-body-custom">
-                <div class="brand-badge">${p.brand || p.source}</div>
-                <div class="product-title-custom" title="${p.name}">${p.name}</div>
-                <div class="tags-row">
-                    <span class="tag-pill">${p.material}</span>
-                    <span class="tag-pill">${p.color}</span>
-                </div>
-                <div class="price-section">
-                    <span class="price-main">${p.price} TL</span>
-                    <span class="price-sub">${p.kg_price ? Math.round(p.kg_price) + ' TL/kg' : ''}</span>
-                </div>
-                <a href="${p.url}" target="_blank" class="btn-buy-orange">Siteye Git ↗</a>
-            </div>
-        </div>
-    `}).join('');
-}
+            products.forEach(p => {
+                const kgPriceText = p.kg_price ? `${Math.round(p.kg_price)} TL / kg` : '';
+                
+                const cardHtml = `
+                    <div class="col">
+                        <div class="product-card">
+                            <div class="card-img-container">
+                                <img src="${p.image}" alt="${p.name}" loading="lazy" onerror="this.src='https://via.placeholder.com/200?text=Gorsel+Yok'">
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-2 d-flex gap-1 flex-wrap">
+                                    <span class="badge bg-secondary badge-tag">${p.source}</span>
+                                    <span class="badge bg-dark badge-tag">${p.material || 'PLA'}</span>
+                                    <span class="badge bg-info text-dark badge-tag">${p.color || ''}</span>
+                                </div>
+                                <h6 class="product-title" title="${p.name}">${p.name}</h6>
+                                <div class="mt-auto">
+                                    <div class="d-flex align-items-baseline justify-content-between mb-3">
+                                        <span class="price-tag">${p.price} TL</span>
+                                        <span class="kg-price">${kgPriceText}</span>
+                                    </div>
+                                    <a href="${p.url}" target="_blank" class="btn-go">
+                                        Mağazaya Git <i class="fa-solid fa-arrow-up-right-from-square ms-1"></i>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', cardHtml);
+            });
+        }
 
-function clearAllFilters() {
-    selectedFilters = { source: '', brand: '', material: '', color: '' };
-    currentSort = 'asc';
-    sortUserSelected = false;
-    document.getElementById('searchQuery').value = '';
-    updateSortUI();
-    loadFilters();
-    loadProducts();
-}
+        function applyFilters() {
+            const search = document.getElementById('filterSearch').value.toLowerCase();
+            const source = document.getElementById('filterSource').value;
+            const brand = document.getElementById('filterBrand').value;
+            const material = document.getElementById('filterMaterial').value;
+            const color = document.getElementById('filterColor').value;
 
-async function triggerUpdate() {
-    const btn = document.getElementById('btnUpdate');
-    const icon = document.getElementById('updateIcon');
-    
-    btn.disabled = true;
-    icon.classList.add('spinning');
-    
-    await fetch('/api/update', { method: 'POST' });
-    
-    setTimeout(() => {
-        btn.disabled = false;
-        icon.classList.remove('spinning');
-        loadFilters();
-        loadProducts();
-    }, 8000);
-}
+            const filtered = allProducts.filter(p => {
+                const matchesSearch = !search || p.name.toLowerCase().includes(search) || (p.brand && p.brand.toLowerCase().includes(search));
+                const matchesSource = !source || p.source === source;
+                const matchesBrand = !brand || p.brand === brand;
+                const matchesMaterial = !material || p.material === material;
+                const matchesColor = !color || p.color === color;
 
-loadFilters();
-loadProducts();
-</script>
+                return matchesSearch && matchesSource && matchesBrand && matchesMaterial && matchesColor;
+            });
+
+            renderProducts(filtered);
+        }
+
+        function resetFilters() {
+            document.getElementById('filterSearch').value = '';
+            document.getElementById('filterSource').value = '';
+            document.getElementById('filterBrand').value = '';
+            document.getElementById('filterMaterial').value = '';
+            document.getElementById('filterColor').value = '';
+            renderProducts(allProducts);
+        }
+
+        async function triggerUpdate() {
+            const btn = document.getElementById('btnUpdate');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i> Güncelleniyor...';
+
+            try {
+                await fetch('/api/update', { method: 'POST' });
+                setTimeout(() => {
+                    loadProducts();
+                    fetchFilters();
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fa-solid fa-arrows-rotate me-1"></i> Fiyatları Güncelle';
+                }, 3000);
+            } catch (err) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-arrows-rotate me-1"></i> Fiyatları Güncelle';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchFilters();
+            loadProducts();
+        });
+    </script>
 </body>
 </html>
+
+```
